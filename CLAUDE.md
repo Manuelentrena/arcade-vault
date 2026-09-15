@@ -10,6 +10,10 @@ Arcade Vault — online gaming platform where players compete for high scores. C
 
 The README states the project follows **spec-driven development** via the `/spec` and `/spec-impl` skills from [Klerith/fernando-skills](https://github.com/Klerith/fernando-skills), installed with `npx skills@latest add Klerith/fernando-skills`. Those skills are not present in this repo (`.claude/` does not exist) — they come from the user's global install. Write a spec before implementing features.
 
+UI work uses the **`/frontend-design`** skill: invoke it before building any new UI or reshaping existing screens, so the visual direction (typography, color, layout) is intentional rather than a templated default.
+
+For deeper UI/UX decisions — design systems, component patterns, accessibility, responsive layout, charts, font pairings, palettes — use the **`/ui-ux-pro-max`** skill. It carries searchable local data (styles, palettes, font pairings, UX guidelines, icons, chart types, stack-specific implementation) and pairs with `/frontend-design`: `/frontend-design` sets the aesthetic direction, `/ui-ux-pro-max` supplies concrete patterns and reviews existing interfaces.
+
 ## Commands
 
 ```bash
