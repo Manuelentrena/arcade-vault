@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
 
-type Section = "biblioteca" | "salon" | "auth";
+type Section = "biblioteca" | "salon";
 
 function sectionOf(pathname: string): Section | null {
   if (pathname === "/") return "biblioteca";
@@ -13,7 +13,6 @@ function sectionOf(pathname: string): Section | null {
     return "biblioteca";
   }
   if (pathname.startsWith("/salon")) return "salon";
-  if (pathname.startsWith("/auth")) return "auth";
   return null;
 }
 
@@ -120,10 +119,27 @@ export function Nav() {
         <Link className={cls("salon")} href="/salon" onClick={close}>
           Salón de la Fama
         </Link>
-        <Link className={cls("auth")} href="/auth" onClick={close}>
-          {user ? "Cuenta" : "Iniciar Sesión"}
-        </Link>
         <div style={{ flex: 1 }} />
+        <div className="panel-session">
+          {user ? (
+            <>
+              <div className="panel-user">{user.name}</div>
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  signOut();
+                  close();
+                }}
+              >
+                CERRAR SESIÓN
+              </button>
+            </>
+          ) : (
+            <Link className="btn" href="/auth" onClick={close}>
+              INICIAR SESIÓN
+            </Link>
+          )}
+        </div>
         <div
           className="pixel"
           style={{

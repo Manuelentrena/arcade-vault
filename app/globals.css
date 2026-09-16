@@ -568,6 +568,7 @@
   font-family: var(--pixel);
   font-size: 12px;
   letter-spacing: 0.12em;
+  white-space: nowrap;
 }
 .av-nav .links {
   display: flex;
@@ -638,6 +639,9 @@
   .av-nav .coin-counter {
     display: none;
   }
+  .av-nav .auth-btn {
+    display: none;
+  }
   .av-nav .hamburger {
     display: inline-flex;
   }
@@ -668,6 +672,32 @@
   border-bottom: 1px dashed var(--line-2);
 }
 .av-mobile-panel a.active {
+  color: var(--cyan);
+}
+.av-mobile-panel .panel-session {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line-2);
+}
+.av-mobile-panel .panel-session .panel-user {
+  font-family: var(--pixel);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--cyan);
+}
+.av-mobile-panel .panel-session .btn {
+  width: 100%;
+}
+/* El enlace hereda de `.av-mobile-panel a`; se le devuelven los valores de `.btn`. */
+.av-mobile-panel .panel-session a.btn {
+  padding: 12px 20px;
+  font-size: 10px;
+  color: var(--ink);
+  border: 1px solid var(--cyan);
+}
+.av-mobile-panel .panel-session a.btn:hover {
   color: var(--cyan);
 }
 .av-mobile-backdrop {
