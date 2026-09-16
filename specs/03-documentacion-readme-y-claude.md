@@ -1,6 +1,6 @@
 # SPEC 03 — Documentación real del repo: `README.md` y `CLAUDE.md`
 
-> **Estado:** Aprovado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 02
 > **Fecha:** 2026-09-16
 > **Objetivo:** Reescribir `README.md` y `CLAUDE.md` para que describan el repo que existe hoy —cinco pantallas, nueve componentes, `lib/`, suite de Playwright y flujo de specs— en vez del scaffold que describen ahora.

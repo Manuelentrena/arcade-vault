@@ -1,6 +1,6 @@
 # SPEC 02 — Barra móvil: sesión dentro de la hamburguesa y logo en una línea
 
-> **Estado:** Aprovado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01
 > **Fecha:** 2026-09-16
 > **Objetivo:** Mover el control de sesión de la barra al panel hamburguesa por debajo de 840 px y dejar el logo `ARCADE VAULT` en una sola línea con el espacio que queda libre.
