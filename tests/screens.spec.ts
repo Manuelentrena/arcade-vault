@@ -196,7 +196,10 @@ test.describe("auth", () => {
 
   test("entrar deja la sesión en el Nav y sobrevive a la recarga", async ({
     page,
+    isMobile,
   }) => {
+    test.skip(isMobile, "el control de sesión vive en el panel, ver responsive");
+
     await signIn(page);
     await expect(page.locator(".auth-btn")).toHaveText("PX_KAI ▾");
 
@@ -204,7 +207,9 @@ test.describe("auth", () => {
     await expect(page.locator(".auth-btn")).toHaveText("PX_KAI ▾");
   });
 
-  test("cerrar sesión borra av_user", async ({ page }) => {
+  test("cerrar sesión borra av_user", async ({ page, isMobile }) => {
+    test.skip(isMobile, "el control de sesión vive en el panel, ver responsive");
+
     await signIn(page);
     await page.locator(".auth-btn").click();
 
@@ -282,6 +287,64 @@ test.describe("responsive", () => {
     await expect(page.locator(".av-nav .links")).toBeHidden();
     await expect(
       page.getByRole("button", { name: "Abrir menú" }),
+    ).toBeVisible();
+  });
+
+  test("la barra móvil deja sólo logo y hamburguesa", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, "solo aplica al proyecto mobile");
+
+    await page.goto("/");
+    await expect(page.locator(".av-nav .auth-btn")).toBeHidden();
+    await expect(
+      page.getByRole("button", { name: "Abrir menú" }),
+    ).toBeVisible();
+  });
+
+  test("el logo ocupa una sola línea", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "solo aplica al proyecto mobile");
+
+    await page.goto("/");
+    await ready(page);
+
+    // Un único rectángulo de cliente = el texto no ha partido en dos líneas.
+    const rects = await page
+      .locator(".av-nav .logo-text")
+      .evaluate((el) => el.getClientRects().length);
+    expect(rects).toBe(1);
+  });
+
+  test("sin sesión el panel lleva a /auth", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "solo aplica al proyecto mobile");
+
+    await page.goto("/");
+    const panel = page.locator(".av-mobile-panel");
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+
+    await panel.getByRole("link", { name: "INICIAR SESIÓN" }).click();
+    await expect(page).toHaveURL("/auth");
+    await expect(panel).not.toHaveClass(/open/);
+  });
+
+  test("con sesión el panel cierra sesión", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "solo aplica al proyecto mobile");
+
+    await signIn(page);
+    const panel = page.locator(".av-mobile-panel");
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+    await expect(panel.locator(".panel-user")).toHaveText("PX_KAI");
+
+    await panel.getByRole("button", { name: "CERRAR SESIÓN" }).click();
+    await expect(panel).not.toHaveClass(/open/);
+    expect(
+      await page.evaluate(() => localStorage.getItem("av_user")),
+    ).toBeNull();
+
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+    await expect(
+      panel.getByRole("link", { name: "INICIAR SESIÓN" }),
     ).toBeVisible();
   });
 
