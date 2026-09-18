@@ -36,5 +36,8 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
+    // La suite recorre el modo simulado de /api/contacto: una clave en
+    // .env.local mandaría correos de verdad en cada `npm test`.
+    env: { RESEND_API_KEY: "" },
   },
 });
