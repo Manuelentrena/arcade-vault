@@ -18,12 +18,12 @@ export function AuthForm() {
     e.preventDefault();
     // Decorativo: no se valida nada, ni el correo ni la contraseña viajan.
     signIn(user || "PLAYER1");
-    router.push("/");
+    router.push("/biblioteca");
   };
 
   const playAsGuest = () => {
     signOut();
-    router.push("/");
+    router.push("/biblioteca");
   };
 
   return (

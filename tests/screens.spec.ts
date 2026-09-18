@@ -1,7 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const ROUTES = [
-  { name: "biblioteca", path: "/" },
+  { name: "home", path: "/" },
+  { name: "biblioteca", path: "/biblioteca" },
   { name: "detalle", path: "/juego/serpentina" },
   { name: "reproductor", path: "/jugar/serpentina" },
   { name: "auth", path: "/auth" },
@@ -11,6 +12,56 @@ const ROUTES = [
 /** Las fuentes de next/font cambian el layout al cargar: esperarlas evita capturas inestables. */
 async function ready(page: Page) {
   await page.evaluate(() => document.fonts.ready);
+}
+
+/**
+ * Espera a que React hidrate el home. Un clic sobre un `Link` que llega antes
+ * se pierde: React ya intercepta el evento pero el router todavía no navega, y
+ * la prueba se queda en `/`. `armed` la añade useReveal al montar, así que es
+ * la señal más barata de que el árbol ya es interactivo.
+ */
+async function hydrated(page: Page) {
+  await expect(page.locator(".reveal.armed").first()).toBeAttached();
+}
+
+/**
+ * La navegación de cliente del App Router no cambia la URL hasta que llega la
+ * respuesta RSC. Con la suite en paralelo contra un solo `next start`, los 5s
+ * por defecto se quedan cortos de vez en cuando.
+ */
+const NAV_TIMEOUT = 15_000;
+
+/**
+ * Deja una sección del home quieta antes de clicar dentro. Al entrar en
+ * pantalla recorre 24px en 600ms, y un clic lanzado a mitad de camino aterriza
+ * al lado del enlace: `transform: none` es el final de esa transición.
+ */
+async function settled(section: Locator) {
+  await section.scrollIntoViewIfNeeded();
+  await expect(section).toHaveCSS("transform", "none");
+}
+
+/** Secciones del home que siguen ocultas: la captura y el usuario esperan 0. */
+async function hiddenReveals(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      Array.from(document.querySelectorAll(".reveal")).filter(
+        (el) => getComputedStyle(el).opacity !== "1",
+      ).length,
+  );
+}
+
+/**
+ * Quita la clase `armed` que useReveal pone en las secciones del home. Sin
+ * esto la captura `fullPage` sale en negro de la mitad hacia abajo: lo que
+ * nunca llegó a entrar en pantalla sigue en `opacity: 0`.
+ */
+async function disarmReveal(page: Page) {
+  await page.evaluate(() => {
+    document
+      .querySelectorAll(".reveal")
+      .forEach((el) => el.classList.remove("armed"));
+  });
 }
 
 /**
@@ -41,8 +92,14 @@ const TICK_MS = 220;
 async function freezeRun(page: Page) {
   await page.addInitScript((tick) => {
     const real = window.setInterval;
-    window.setInterval = ((handler: TimerHandler, delay?: number, ...args: unknown[]) =>
-      delay === tick ? 0 : real(handler, delay, ...args)) as typeof window.setInterval;
+    window.setInterval = ((
+      handler: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) =>
+      delay === tick
+        ? 0
+        : real(handler, delay, ...args)) as typeof window.setInterval;
   }, TICK_MS);
 }
 
@@ -54,7 +111,7 @@ async function signIn(page: Page, name = "px_kai") {
   await page.goto("/auth");
   await page.getByLabel("Usuario").fill(name);
   await page.getByRole("button", { name: "ENTRAR AL VAULT" }).click();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/biblioteca");
 }
 
 test.describe("capturas de referencia", () => {
@@ -65,6 +122,7 @@ test.describe("capturas de referencia", () => {
       if (route.name === "reproductor") await freezeRun(page);
       await page.goto(route.path);
       await ready(page);
+      if (route.name === "home") await disarmReveal(page);
 
       if (route.name === "reproductor") {
         // Se captura en pausa, el estado con más interfaz visible.
@@ -84,20 +142,96 @@ test.describe("capturas de referencia", () => {
       await expect(page).toHaveScreenshot(`${route.name}.png`, {
         animations: "disabled",
         fullPage: true,
+        // El home mide casi 4000px: cada captura tarda, y los 5s por defecto no
+        // dan para las dos tomas iguales que Playwright exige.
+        timeout: route.name === "home" ? 30_000 : undefined,
       });
     });
   }
 });
 
+test.describe("home", () => {
+  test("pinta las siete secciones", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("h1.home-title")).toContainText("EL ARCADE");
+    await expect(page.locator(".feature-card")).toHaveCount(4);
+    await expect(page.locator(".mini-card")).toHaveCount(6);
+    await expect(page.locator(".stat-block")).toHaveCount(3);
+    await expect(page.locator(".tick-row")).toHaveCount(7);
+    await expect(page.locator(".top-row")).toHaveCount(5);
+    await expect(page.locator(".faq-item")).toHaveCount(3);
+    await expect(page.locator(".home-final")).toBeVisible();
+  });
+
+  test("el carril enlaza al detalle de cada juego", async ({ page }) => {
+    await page.goto("/");
+    await hydrated(page);
+    const first = page.locator(".mini-card").first();
+    await expect(first).toHaveAttribute("href", "/juego/bloque-buster");
+    await settled(page.locator(".home-section", { has: first }));
+    await first.click();
+    await expect(page).toHaveURL("/juego/bloque-buster", {
+      timeout: NAV_TIMEOUT,
+    });
+  });
+
+  test("EXPLORAR JUEGOS lleva a la biblioteca", async ({ page }) => {
+    await page.goto("/");
+    await hydrated(page);
+    await page.getByRole("link", { name: /EXPLORAR JUEGOS/ }).click();
+    await expect(page).toHaveURL("/biblioteca", { timeout: NAV_TIMEOUT });
+  });
+
+  test("VER SALÓN lleva al salón de la fama", async ({ page }) => {
+    await page.goto("/");
+    await hydrated(page);
+    const link = page.getByRole("link", { name: /VER SALÓN/ });
+    await settled(page.locator(".home-section", { has: link }));
+    await link.click();
+    await expect(page).toHaveURL("/salon", { timeout: NAV_TIMEOUT });
+  });
+
+  test("un salto al final no deja secciones invisibles", async ({ page }) => {
+    await page.goto("/");
+    await ready(page);
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // El observador no avisa de lo que pasó de "debajo" a "encima" sin
+    // intersectar: el hook lo compensa barriendo las secciones rebasadas.
+    await expect.poll(() => hiddenReveals(page)).toBe(0);
+  });
+});
+
+test.describe("home sin animación de entrada", () => {
+  // Las dos rutas por las que useReveal no llega a ocultar nada.
+  test.describe("sin JavaScript", () => {
+    test.use({ javaScriptEnabled: false });
+
+    test("todas las secciones se ven", async ({ page }) => {
+      await page.goto("/");
+      expect(await hiddenReveals(page)).toBe(0);
+    });
+  });
+
+  test.describe("con prefers-reduced-motion", () => {
+    test.use({ reducedMotion: "reduce" });
+
+    test("todas las secciones se ven", async ({ page }) => {
+      await page.goto("/");
+      await ready(page);
+      expect(await hiddenReveals(page)).toBe(0);
+    });
+  });
+});
+
 test.describe("biblioteca", () => {
   test("muestra los 8 juegos", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await expect(page.locator(".card")).toHaveCount(8);
     await expect(page.locator(".cover-bg")).toHaveCount(8);
   });
 
   test("el buscador filtra por nombre", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await page.getByLabel("Buscar un juego por nombre").fill("ser");
     await expect(page.locator(".card")).toHaveCount(1);
     await expect(page.locator(".card .title")).toHaveText("SERPENTINA");
@@ -106,14 +240,14 @@ test.describe("biblioteca", () => {
   test("una búsqueda sin resultados muestra el estado vacío", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await page.getByLabel("Buscar un juego por nombre").fill("serzzz");
     await expect(page.locator(".card")).toHaveCount(0);
     await expect(page.getByText("NO HAY RESULTADOS")).toBeVisible();
   });
 
   test("el chip PUZZLE deja un solo juego", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await page.getByRole("button", { name: "PUZZLE" }).click();
     await expect(page.locator(".card")).toHaveCount(1);
     await expect(page.locator(".card .title")).toHaveText("CAÍDA");
@@ -122,11 +256,11 @@ test.describe("biblioteca", () => {
   test("la tarjeta navega al detalle y el botón atrás vuelve", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await page.locator(".card", { hasText: "SERPENTINA" }).click();
     await expect(page).toHaveURL("/juego/serpentina");
     await page.goBack();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/biblioteca");
     await expect(page.locator(".card")).toHaveCount(8);
   });
 });
@@ -222,7 +356,10 @@ test.describe("auth", () => {
     page,
     isMobile,
   }) => {
-    test.skip(isMobile, "el control de sesión vive en el panel, ver responsive");
+    test.skip(
+      isMobile,
+      "el control de sesión vive en el panel, ver responsive",
+    );
 
     await signIn(page);
     await expect(page.locator(".auth-btn")).toHaveText("PX_KAI ▾");
@@ -232,7 +369,10 @@ test.describe("auth", () => {
   });
 
   test("cerrar sesión borra av_user", async ({ page, isMobile }) => {
-    test.skip(isMobile, "el control de sesión vive en el panel, ver responsive");
+    test.skip(
+      isMobile,
+      "el control de sesión vive en el panel, ver responsive",
+    );
 
     await signIn(page);
     await page.locator(".auth-btn").click();
@@ -248,7 +388,7 @@ test.describe("auth", () => {
     await page.goto("/auth");
     await page.getByRole("button", { name: "JUGAR COMO INVITADO" }).click();
 
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/biblioteca");
     expect(
       await page.evaluate(() => localStorage.getItem("av_user")),
     ).toBeNull();
@@ -290,7 +430,7 @@ test.describe("responsive", () => {
   test("la hamburguesa abre y cierra el menú", async ({ page, isMobile }) => {
     test.skip(!isMobile, "solo aplica al proyecto mobile");
 
-    await page.goto("/");
+    await page.goto("/biblioteca");
     const panel = page.locator(".av-mobile-panel");
     await expect(panel).not.toHaveClass(/open/);
 
@@ -307,7 +447,7 @@ test.describe("responsive", () => {
   }) => {
     test.skip(!isMobile, "solo aplica al proyecto mobile");
 
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await expect(page.locator(".av-nav .links")).toBeHidden();
     await expect(
       page.getByRole("button", { name: "Abrir menú" }),
@@ -320,7 +460,7 @@ test.describe("responsive", () => {
   }) => {
     test.skip(!isMobile, "solo aplica al proyecto mobile");
 
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await expect(page.locator(".av-nav .auth-btn")).toBeHidden();
     await expect(
       page.getByRole("button", { name: "Abrir menú" }),
@@ -330,7 +470,7 @@ test.describe("responsive", () => {
   test("el logo ocupa una sola línea", async ({ page, isMobile }) => {
     test.skip(!isMobile, "solo aplica al proyecto mobile");
 
-    await page.goto("/");
+    await page.goto("/biblioteca");
     await ready(page);
 
     // Un único rectángulo de cliente = el texto no ha partido en dos líneas.
@@ -343,7 +483,7 @@ test.describe("responsive", () => {
   test("sin sesión el panel lleva a /auth", async ({ page, isMobile }) => {
     test.skip(!isMobile, "solo aplica al proyecto mobile");
 
-    await page.goto("/");
+    await page.goto("/biblioteca");
     const panel = page.locator(".av-mobile-panel");
     await page.getByRole("button", { name: "Abrir menú" }).click();
 

@@ -26,7 +26,7 @@ export default function Error({
         <button className="btn lg" onClick={reset}>
           REINTENTAR
         </button>
-        <Link className="btn ghost lg" href="/">
+        <Link className="btn ghost lg" href="/biblioteca">
           VOLVER AL VAULT
         </Link>
       </div>

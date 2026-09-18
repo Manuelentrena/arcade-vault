@@ -10,7 +10,7 @@ export default function NotFound() {
         <span className="blink">_</span>
       </p>
       <div className="mt-2 flex flex-wrap justify-center gap-3">
-        <Link className="btn lg" href="/">
+        <Link className="btn lg" href="/biblioteca">
           VOLVER AL VAULT
         </Link>
         <Link className="btn ghost lg" href="/salon">

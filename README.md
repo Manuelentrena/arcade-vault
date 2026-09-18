@@ -4,7 +4,7 @@ Plataforma web para jugar a clásicos arcade y competir por la mayor puntuación
 
 ## Estado actual
 
-El repo contiene una **maqueta navegable completa**: cinco pantallas reales sobre Next.js App Router, con navegación, filtros, formulario de sesión y tablas de puntuaciones funcionando de extremo a extremo. Lo que todavía **no** existe:
+El repo contiene una **maqueta navegable completa**: seis pantallas reales sobre Next.js App Router, con navegación, filtros, formulario de sesión y tablas de puntuaciones funcionando de extremo a extremo. Lo que todavía **no** existe:
 
 - **Los ocho juegos son decorativos.** No hay motor de juego. El reproductor (`/jugar/[id]`) anima una escena CRT y sube la puntuación sola con un temporizador; no se juega nada.
 - **No hay backend, base de datos ni API.** Todos los datos son estáticos y viven en `lib/`.
@@ -49,7 +49,8 @@ La aplicación queda en `http://localhost:3000`.
 
 | Ruta | Fichero | Qué muestra |
 | --- | --- | --- |
-| `/` | `app/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos. |
+| `/` | `app/page.tsx` | Portada: hero, por qué Arcade Vault, avance de seis juegos, cifras, actividad en vivo, precios y llamada final. |
+| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos. |
 | `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe. |
 | `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: pantalla CRT animada, HUD con puntuación y vidas, pausa, `FIN` y modal de fin de partida. `notFound()` si el `id` no existe. |
 | `/auth` | `app/auth/page.tsx` | Entrar o crear cuenta. Crea la sesión falsa y vuelve a la biblioteca. |
@@ -64,8 +65,9 @@ Las URL están en español a propósito y coinciden con la maqueta original.
 ```
 app/                      # App Router: rutas, layout raíz y CSS global
   layout.tsx              # fuentes, metadatos, SessionProvider, Nav y Footer
-  globals.css             # tema arcade completo (~1.800 líneas) + import de Tailwind
-  page.tsx                # biblioteca
+  globals.css             # tema arcade completo (~2.600 líneas) + import de Tailwind
+  page.tsx                # portada
+  biblioteca/page.tsx     # biblioteca
   juego/[id]/page.tsx     # detalle del juego
   jugar/[id]/page.tsx     # reproductor
   auth/page.tsx           # entrar / crear cuenta
@@ -73,7 +75,7 @@ app/                      # App Router: rutas, layout raíz y CSS global
   not-found.tsx           # 404
   error.tsx               # límite de error
 
-components/               # nueve componentes de interfaz
+components/               # componentes de interfaz
   nav.tsx                 # barra, enlaces activos y panel móvil con la sesión dentro
   footer.tsx              # pie (componente de servidor)
   session-provider.tsx    # contexto de sesión, expone useSession()
@@ -83,6 +85,8 @@ components/               # nueve componentes de interfaz
   game-player.tsx         # reproductor CRT, HUD y modal de fin de partida
   auth-form.tsx           # formulario de sesión
   hall-of-fame.tsx        # podio y tabla del salón
+  home/                   # secciones de la portada (hero, features, carril,
+                          # cifras, actividad, precios y cierre) y useReveal
 
 lib/                      # datos y estado, todo simulado
   games.ts                # los ocho juegos, categorías y getGame()
@@ -91,7 +95,7 @@ lib/                      # datos y estado, todo simulado
 
 tests/                    # suite de Playwright
   screens.spec.ts
-  screens.spec.ts-snapshots/   # diez capturas de referencia
+  screens.spec.ts-snapshots/   # doce capturas de referencia
 
 specs/                    # specs del proyecto, una por funcionalidad
 references/templates/     # maqueta HTML/JSX original de la que salieron las pantallas
@@ -99,7 +103,7 @@ references/templates/     # maqueta HTML/JSX original de la que salieron las pan
 
 ## Pruebas
 
-La suite vive entera en `tests/screens.spec.ts` y cubre humo, interacción y comparación visual. Se organiza por bloques: capturas de referencia, biblioteca, detalle, reproductor, auth, salón de la fama y responsive.
+La suite vive entera en `tests/screens.spec.ts` y cubre humo, interacción y comparación visual. Se organiza por bloques: capturas de referencia, portada, biblioteca, detalle, reproductor, auth, salón de la fama y responsive.
 
 Dos proyectos, ambos sobre Chromium (`playwright.config.ts`):
 
@@ -110,14 +114,17 @@ Dos proyectos, ambos sobre Chromium (`playwright.config.ts`):
 
 El `webServer` de Playwright ejecuta `npm run build` y luego `next start -p 3100`, así que la primera ejecución tarda: se prueba contra la compilación de producción, no contra el servidor de desarrollo.
 
-Las capturas de referencia están en `tests/screens.spec.ts-snapshots/`: cinco por proyecto, una por ruta. Regenéralas **solo** cuando un cambio visual sea intencionado, y solo las del proyecto afectado:
+Las capturas de referencia están en `tests/screens.spec.ts-snapshots/`: seis por proyecto, una por ruta. Regenéralas **solo** cuando un cambio visual sea intencionado, y solo las del proyecto afectado:
 
 ```bash
-npx playwright test --project=mobile --update-snapshots   # solo móvil
-npm run test:update                                        # todas
+npx playwright test --project=mobile --update-snapshots       # solo móvil
+npm run test:update                                            # todas
+npx playwright test --project=desktop --update-snapshots=all   # reescribe aunque pasen
 ```
 
 Antes de regenerar, verifica el cambio a mano en el navegador. Una captura regenerada a ciegas convierte una regresión en la nueva referencia.
+
+La comparación usa `maxDiffPixelRatio: 0.01`, así que un cambio visual pequeño —un enlace más en la barra, por ejemplo— no rompe la suite **ni** actualiza la referencia: `--update-snapshots` sólo reescribe lo que falla. Para poner las capturas al día tras un cambio así hace falta `--update-snapshots=all`.
 
 ## Desarrollo guiado por specs
 
@@ -141,7 +148,8 @@ npx skills@latest add Klerith/fernando-skills
 | [01 — MVP visual de las pantallas](specs/01-mvp-pantallas-visuales.md) | Implementado | — |
 | [02 — Barra móvil: sesión en la hamburguesa](specs/02-nav-movil-sesion-en-hamburguesa.md) | Implementado | SPEC 01 |
 | [03 — Documentación del repo](specs/03-documentacion-readme-y-claude.md) | Implementado | SPEC 01, SPEC 02 |
+| [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md) | Implementado | SPEC 01, SPEC 02, SPEC 03 |
 
 ## Referencias
 
-`references/templates/` guarda la maqueta original de la que salieron las cinco pantallas: HTML con React UMD y Babel en el navegador, más un `styles.css` de 950 líneas. No se compila ni se despliega; sigue en el repo como fuente visual de verdad para comparar cuando un estilo portado no cuadra.
+`references/templates/` guarda la maqueta original de la que salieron las pantallas: HTML con React UMD y Babel en el navegador, más un `styles.css` de 950 líneas. En `references/templates/home-about/` está la maqueta de la portada (y una pantalla «Acerca de» que todavía no se ha portado). No se compila ni se despliega; sigue en el repo como fuente visual de verdad para comparar cuando un estilo portado no cuadra.
