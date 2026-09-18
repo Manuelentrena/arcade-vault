@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 /**
- * Hace aparecer las secciones `.reveal` del home según entran en pantalla.
+ * Hace aparecer las secciones `.reveal` de la página según entran en pantalla.
  *
  * El CSS las deja visibles por defecto: es este hook el que las oculta al
  * montar añadiendo `armed`, y las devuelve con `in` al intersectar. Así, sin
