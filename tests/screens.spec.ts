@@ -27,6 +27,25 @@ async function openPlayer(page: Page, path = "/jugar/serpentina") {
   await page.clock.pauseAt(CLOCK_PAUSE);
 }
 
+/** Debe seguir a TICK_MS en components/game-player.tsx. */
+const TICK_MS = 220;
+
+/**
+ * Anula el setInterval de la partida antes de que cargue la página, dejándola
+ * en su estado inicial. Congelar el reloj no basta: el intervalo nace cuando
+ * React monta, así que el número de ticks depende del tiempo de carga, y con él
+ * los dígitos de la puntuación — que al ser el HUD flex-wrap cambian su altura
+ * y desplazan toda la página. Se filtra sólo ese intervalo para no tocar los
+ * temporizadores de React ni de Next.
+ */
+async function freezeRun(page: Page) {
+  await page.addInitScript((tick) => {
+    const real = window.setInterval;
+    window.setInterval = ((handler: TimerHandler, delay?: number, ...args: unknown[]) =>
+      delay === tick ? 0 : real(handler, delay, ...args)) as typeof window.setInterval;
+  }, TICK_MS);
+}
+
 function scoreOf(text: string): number {
   return Number(text.replace(/\D/g, ""));
 }
@@ -41,18 +60,23 @@ async function signIn(page: Page, name = "px_kai") {
 test.describe("capturas de referencia", () => {
   for (const route of ROUTES) {
     test(`${route.name} coincide con su captura`, async ({ page }) => {
+      // La partida avanza sola con puntuación aleatoria: se congela para que la
+      // captura no dependa del tiempo de carga.
+      if (route.name === "reproductor") await freezeRun(page);
       await page.goto(route.path);
       await ready(page);
 
       if (route.name === "reproductor") {
-        // La puntuación sube sola: se pausa y se enmascara para estabilizar la captura.
+        // Se captura en pausa, el estado con más interfaz visible.
         await page.getByRole("button", { name: "PAUSA" }).click();
         await expect(
           page.getByRole("button", { name: "REANUDAR" }),
         ).toBeVisible();
+        // fullPage como el resto: al clicar PAUSA, Playwright puede desplazar el
+        // botón hasta la vista, y una captura de viewport heredaría ese scroll.
         await expect(page).toHaveScreenshot(`${route.name}.png`, {
           animations: "disabled",
-          mask: [page.locator(".hud-stat").nth(1)],
+          fullPage: true,
         });
         return;
       }
