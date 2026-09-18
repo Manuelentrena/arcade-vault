@@ -7,7 +7,17 @@ const ROUTES = [
   { name: "reproductor", path: "/jugar/serpentina" },
   { name: "auth", path: "/auth" },
   { name: "salon", path: "/salon" },
+  { name: "acerca", path: "/acerca" },
 ] as const;
+
+/**
+ * Una IP distinta por envío. El endpoint sólo acepta 3 cada 10 minutos por IP,
+ * y entre los dos proyectos la suite hace más que eso contra el mismo servidor.
+ */
+function freshIp(): string {
+  const octet = () => Math.floor(Math.random() * 256);
+  return `10.${octet()}.${octet()}.${octet()}`;
+}
 
 /** Las fuentes de next/font cambian el layout al cargar: esperarlas evita capturas inestables. */
 async function ready(page: Page) {
@@ -122,7 +132,9 @@ test.describe("capturas de referencia", () => {
       if (route.name === "reproductor") await freezeRun(page);
       await page.goto(route.path);
       await ready(page);
-      if (route.name === "home") await disarmReveal(page);
+      if (route.name === "home" || route.name === "acerca") {
+        await disarmReveal(page);
+      }
 
       if (route.name === "reproductor") {
         // Se captura en pausa, el estado con más interfaz visible.
@@ -423,6 +435,103 @@ test.describe("salón de la fama", () => {
     );
     await expect(page.locator(".tr.you .pl")).toHaveText("PX_KAI");
     await expect(page.locator(".hall-table .tr")).toHaveCount(14);
+  });
+});
+
+test.describe("acerca", () => {
+  test("pinta las dos mitades de la página", async ({ page }) => {
+    await page.goto("/acerca");
+    await expect(page.locator(".highlight")).toHaveCount(3);
+    await expect(page.locator(".div-pixels span")).toHaveCount(24);
+    await expect(page.locator(".contact-tips .tip")).toHaveCount(3);
+    await expect(page.locator(".contact-form")).toBeVisible();
+  });
+
+  test("un envío vacío sacude el formulario y no sale del navegador", async ({
+    page,
+  }) => {
+    const calls: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/contacto")) calls.push(request.url());
+    });
+
+    await page.goto("/acerca");
+    await page.getByRole("button", { name: /ENVIAR MENSAJE/ }).click();
+
+    await expect(page.locator(".contact-form")).toHaveClass(/shake/);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("un envío válido devuelve el terminal", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-forwarded-for": freshIp() });
+    await page.goto("/acerca");
+
+    await page.getByLabel("NOMBRE").fill("px_kai");
+    await page.getByLabel("CORREO ELECTRÓNICO").fill("jugador@vault.gg");
+    await page
+      .getByLabel("MENSAJE")
+      .fill("Propongo añadir un clon de Pang al catálogo.");
+    await page.getByRole("button", { name: /ENVIAR MENSAJE/ }).click();
+
+    await expect(page.locator(".terminal-success")).toBeVisible();
+    await expect(page.locator(".term-body .success")).toContainText("PX_KAI");
+  });
+
+  test("el honeypot no es enfocable con Tab", async ({ page }) => {
+    await page.goto("/acerca");
+    await page.getByLabel("MENSAJE").focus();
+    await page.keyboard.press("Tab");
+
+    const focused = await page.evaluate(
+      () => document.activeElement?.className ?? "",
+    );
+    expect(focused).not.toContain("contact-hp");
+  });
+});
+
+test.describe("endpoint de contacto", () => {
+  const send = (data: Record<string, string>) => ({
+    data,
+    headers: { "x-forwarded-for": freshIp() },
+  });
+
+  test("sin campos responde 400", async ({ request }) => {
+    const response = await request.post("/api/contacto", send({}));
+    expect(response.status()).toBe(400);
+    expect(await response.json()).toMatchObject({ ok: false });
+  });
+
+  test("con el honeypot relleno responde 200 sin enviar", async ({
+    request,
+  }) => {
+    const response = await request.post(
+      "/api/contacto",
+      send({
+        name: "bot",
+        email: "bot@spam.example",
+        msg: "compra seguidores baratos",
+        website: "http://spam.example",
+      }),
+    );
+    expect(response.status()).toBe(200);
+    // Sin `simulated`: ni siquiera llegó a la parte del envío.
+    expect(await response.json()).toEqual({ ok: true });
+  });
+
+  test("con datos válidos y sin clave responde en modo simulado", async ({
+    request,
+  }) => {
+    const response = await request.post(
+      "/api/contacto",
+      send({
+        name: "px_kai",
+        email: "jugador@vault.gg",
+        msg: "Propongo añadir un clon de Pang al catálogo.",
+        website: "",
+      }),
+    );
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, simulated: true });
   });
 });
 

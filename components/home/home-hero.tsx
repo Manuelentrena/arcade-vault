@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { HomeSilhouettes } from "@/components/home/home-silhouettes";
-import { useReveal } from "@/components/home/use-reveal";
+import { useReveal } from "@/components/use-reveal";
 
 /**
  * Cliente por el hook: `useReveal` arma las secciones `.reveal` del resto de

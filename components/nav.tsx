@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
 
-type Section = "inicio" | "biblioteca" | "salon";
+type Section = "inicio" | "biblioteca" | "salon" | "acerca";
 
 function sectionOf(pathname: string): Section | null {
   if (pathname === "/") return "inicio";
@@ -17,6 +17,7 @@ function sectionOf(pathname: string): Section | null {
     return "biblioteca";
   }
   if (pathname.startsWith("/salon")) return "salon";
+  if (pathname.startsWith("/acerca")) return "acerca";
   return null;
 }
 
@@ -57,6 +58,9 @@ export function Nav() {
           </Link>
           <Link className={cls("salon")} href="/salon">
             Salón de la Fama
+          </Link>
+          <Link className={cls("acerca")} href="/acerca">
+            Acerca de
           </Link>
         </div>
 
@@ -128,6 +132,9 @@ export function Nav() {
         </Link>
         <Link className={cls("salon")} href="/salon" onClick={close}>
           Salón de la Fama
+        </Link>
+        <Link className={cls("acerca")} href="/acerca" onClick={close}>
+          Acerca de
         </Link>
         <div style={{ flex: 1 }} />
         <div className="panel-session">
