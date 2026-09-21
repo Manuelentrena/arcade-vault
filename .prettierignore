@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+test-results/
+playwright-report/
+tests/screens.spec.ts-snapshots/
+references/
+package-lock.json
+app/globals.css
+AGENTS.md
