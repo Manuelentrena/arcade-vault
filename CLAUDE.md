@@ -8,7 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Arcade Vault — an arcade gaming platform where players compete for high scores. The five screens are ported from the HTML/JSX mockup in `references/templates/` and are fully navigable: library with search and category filters, game detail with a leaderboard, a CRT player, a sign-in form, and a hall of fame.
 
-Everything below the UI is simulated. There is no backend, database, or API: the eight games are decorative (no game engine — the player animates a CRT scene and increments the score on a timer), the session is fake and lives in `localStorage` under `av_user`, and leaderboard rows are produced by a deterministic LCG in `lib/scores.ts` and never persisted. Treat those as deliberate boundaries; a spec decides when one of them changes.
+Most of what sits below the UI is still simulated: the eight games are decorative (no game engine — the player animates a CRT scene and increments the score on a timer), and leaderboard rows are produced by a deterministic LCG in `lib/scores.ts` and never persisted. Treat those as deliberate boundaries; a spec decides when one of them changes.
+
+**Authentication is the exception — it is real.** SPEC 06 replaced the fake session with Supabase Auth: email/password with mandatory email confirmation, Google and GitHub OAuth, a `public.profiles` table under RLS, and cookies refreshed by `proxy.ts`. The session lives in cookies, never in `localStorage`; `lib/session.ts` and the `av_user` key are gone. `/jugar/[id]` is the only protected route.
 
 The project follows **spec-driven development**. Write a spec before implementing a feature — see the spec workflow section below.
 
@@ -23,10 +25,17 @@ npm run dev          # next dev — also regenerates the nextjs-agent-rules bloc
 npm run build        # next build
 npm run start        # next start (requires a prior build)
 npm run lint         # eslint (flat config; no --dir arg, lints the whole project)
-npm test             # playwright test — both projects
+npm test             # playwright test — both projects (pretest resets the local DB)
 npm run test:update  # playwright test --update-snapshots
 npx tsc --noEmit     # typecheck; no npm script exists for this
+
+npx supabase start   # local stack in Docker (Postgres, Auth, Studio, Mailpit)
+npx supabase stop    # tear it down
+npx supabase db reset # replay migrations + seed.sql
+npx supabase status  # API URL, publishable key, Mailpit URL
 ```
+
+`npm test` requires the local Supabase stack to be running: its `pretest` runs `npx supabase db reset` and then waits for Auth to answer. Without Docker up it fails there.
 
 Playwright is the only test runner here, and there are no unit tests — everything is end-to-end in `tests/screens.spec.ts`. Its `webServer` runs `npm run build` and then `next start -p 3100`, so `npm test` compiles a production build first and is slow. Expect minutes, not seconds.
 
@@ -40,20 +49,31 @@ Routes (App Router, URLs deliberately in Spanish):
 | `/juego/[id]` | `app/juego/[id]/page.tsx` | Async page; `notFound()` when `getGame(id)` misses |
 | `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Async page; same `notFound()` guard |
 | `/auth` | `app/auth/page.tsx` | Thin wrapper over `AuthForm` |
+| `/auth/callback` | `app/auth/callback/route.ts` | OAuth return; `exchangeCodeForSession` |
+| `/auth/confirm` | `app/auth/confirm/route.ts` | Email-confirmation link; `verifyOtp` |
 | `/salon` | `app/salon/page.tsx` | Thin wrapper over `HallOfFame` |
 | — | `app/not-found.tsx`, `app/error.tsx` | 404 screen and error boundary (`error.tsx` is a client component) |
+| — | `proxy.ts` (repo root) | Refreshes the token on every request and guards `/jugar/[id]` |
 
 The route files under `app/` stay thin: they resolve params, fetch from `lib/`, and delegate to a component. Put behavior in `components/`, not in the page.
 
 Nine components in `components/`. Seven are client components (`"use client"`) because they hold state or DOM handlers — `nav.tsx`, `session-provider.tsx`, `library-browser.tsx`, `game-card.tsx`, `game-player.tsx`, `auth-form.tsx`, `hall-of-fame.tsx`. Two are server components and should stay that way: `footer.tsx` and `leaderboard.tsx`, which renders rows it receives as props.
 
-Three modules in `lib/`, all mock data:
+Two mock-data modules in `lib/`:
 
 - `games.ts` — `Game`, `GameColor`, `GameCat`, `CatFilter`, the `GAMES` array, `CATS`, and `getGame(id)`.
 - `scores.ts` — `ScoreRow`, `PLAYERS`, `seededScores(seed, count)`, plus `detailSeed(gameId)` and `hallSeed(gameId)`. The seeds are inherited from the mockup; changing them rewrites every leaderboard in the app and every reference screenshot.
-- `session.ts` — `SessionUser`, `SESSION_KEY`, `normalizeName`, `readSession`, `writeSession`, `subscribeSession`, `getSessionSnapshot`, `getServerSessionSnapshot`.
 
-**Session rule:** components read session state through `useSession()` from `components/session-provider.tsx`. Never read or write `localStorage` directly inside a component — the provider exists to keep the server snapshot and the client snapshot from diverging during hydration.
+Plus `lib/supabase/`, which is not mock data:
+
+- `client.ts` — `createClient()` for the browser (`createBrowserClient`).
+- `server.ts` — `createClient()` for server components and route handlers, over `await cookies()`. Never share one across requests.
+- `session.ts` — `SessionUser` (`id`, `name`, `email`) and `getServerSession()`, which verifies the JWT with `getClaims()` and then reads `profiles.username`.
+- `types.ts` — generated with `npx supabase gen types typescript`. It is committed; regenerate it whenever the schema changes.
+
+**Session rule:** components read session state through `useSession()` from `components/session-provider.tsx`; server code uses `getServerSession()`. `app/layout.tsx` resolves the session once and hands it to the provider as `initialUser`, so the first HTML already carries the name — which is also why all seven routes are dynamic. Never talk to Supabase auth directly from a component that only needs to know who is signed in, and never reintroduce a second source of truth in `localStorage`.
+
+**Schema changes** go in a migration under `supabase/migrations/`, never as an ad-hoc statement against the database: `npx supabase db reset` replays them locally and is what `pretest` runs.
 
 ## Stack and conventions
 
@@ -76,6 +96,10 @@ Two Playwright projects, both on Chromium (`playwright.config.ts`):
 | --- | --- |
 | `desktop` | 1440 × 900 |
 | `mobile` | emulated iPhone 13 (390 × 844) |
+
+The suite runs with `workers: 2`. Every navigation now goes through the Docker stack — the proxy validates the token, the layout resolves the session — and with one worker per core Auth exhausts its DB pool and requests start dying with 504s while nothing is actually broken. `playwright.config.ts` also pins the local `NEXT_PUBLIC_SUPABASE_*` values in the `webServer` `env`: they are inlined into the `next build` that `webServer` runs, so without them the suite would compile against the remote project and create real users.
+
+Tests that touch `/auth` call `authReady(page)` first. The server already ships the `<form>`, so a click that lands before hydration triggers a native submit and is silently lost.
 
 Tests that only make sense on one viewport gate themselves with the `isMobile` fixture — `test.skip(isMobile, "…")` or `test.skip(!isMobile, "…")`. Follow that pattern instead of branching inside a test body.
 
