@@ -39,10 +39,10 @@ La aplicación queda en `http://localhost:3000`.
 
 `npx supabase status` imprime los datos del stack local:
 
-| Servicio | URL |
-| --- | --- |
-| API | `http://127.0.0.1:54321` |
-| Studio | `http://127.0.0.1:54323` |
+| Servicio                   | URL                      |
+| -------------------------- | ------------------------ |
+| API                        | `http://127.0.0.1:54321` |
+| Studio                     | `http://127.0.0.1:54323` |
 | Mailpit (buzón de pruebas) | `http://127.0.0.1:54324` |
 
 Para trabajar contra el stack local, pon en `.env.local` la URL de la API y la `PUBLISHABLE_KEY` que imprime ese comando. **`npm test` no las necesita**: `playwright.config.ts` fija las suyas en el `env` del `webServer`, para que la suite no compile nunca contra el proyecto remoto.
@@ -57,13 +57,13 @@ Las usan `POST /api/contacto` (el formulario de `/acerca`) y Supabase Auth. Copi
 cp .env.example .env.local
 ```
 
-| Variable | Para qué |
-| --- | --- |
-| `RESEND_API_KEY` | Clave de [Resend](https://resend.com/api-keys). **Vacía = modo simulado.** |
-| `CONTACT_TO_EMAIL` | Destinatario de los mensajes. |
-| `CONTACT_FROM_EMAIL` | Remitente. Por defecto el de pruebas, `onboarding@resend.dev`. |
-| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto de Supabase (o `http://127.0.0.1:54321` en local). |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Clave publicable (`sb_publishable_…`), **no** la `anon` heredada. |
+| Variable                               | Para qué                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| `RESEND_API_KEY`                       | Clave de [Resend](https://resend.com/api-keys). **Vacía = modo simulado.** |
+| `CONTACT_TO_EMAIL`                     | Destinatario de los mensajes.                                              |
+| `CONTACT_FROM_EMAIL`                   | Remitente. Por defecto el de pruebas, `onboarding@resend.dev`.             |
+| `NEXT_PUBLIC_SUPABASE_URL`             | URL del proyecto de Supabase (o `http://127.0.0.1:54321` en local).        |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Clave publicable (`sb_publishable_…`), **no** la `anon` heredada.          |
 
 **Las dos `NEXT_PUBLIC_*` son públicas**: Next las incrusta en el bundle del navegador. Lo que protege los datos es la RLS de `public.profiles`, no el secreto de esas claves. Aun así, `.env.example` lleva marcadores y no los valores reales, porque hay rastreos automáticos que buscan proyectos Supabase sin RLS para abusar de `/auth/v1/signup`. **Ninguna clave de servicio** (`service_role`, `sb_secret_…`) entra en el repo ni llega al cliente.
 
@@ -75,15 +75,16 @@ cp .env.example .env.local
 2. Una API key (`re_…`) desde el panel de Resend.
 3. Pegarla tras `RESEND_API_KEY=` en `.env.local` y reiniciar el servidor.
 
-El endpoint se defiende con un honeypot, validación en servidor y un rate limit de 3 envíos cada 10 minutos por IP. Ese límite es *best effort*: vive en memoria, se pierde al reiniciar y no se comparte entre instancias.
+El endpoint se defiende con un honeypot, validación en servidor y un rate limit de 3 envíos cada 10 minutos por IP. Ese límite es _best effort_: vive en memoria, se pierde al reiniciar y no se comparte entre instancias.
 
 ## Autenticación
 
-`/auth` usa Supabase Auth. Tres caminos de entrada:
+`/auth` usa Supabase Auth. Cuatro caminos de entrada:
 
 - **Correo y contraseña.** Al registrarse hace falta además un nombre de jugador: se guarda en `public.profiles.username`, en mayúsculas, único y de 2 a 10 caracteres. Un nombre ocupado se rechaza en el navegador, antes de llamar a Supabase.
 - **Confirmación por correo.** El registro no entra hasta pulsar el enlace del mensaje. En local ese correo aterriza en Mailpit (`http://127.0.0.1:54324`), no sale de la máquina. El enlace pasa por `/auth/confirm`, que canjea el token y deja la sesión iniciada.
 - **Google y GitHub.** Si el proveedor no está dado de alta, el botón pinta un terminal de error en vez de romperse.
+- **Invitado.** `JUGAR COMO INVITADO` abre una sesión anónima de Supabase: usuario real con `is_anonymous = true`, su JWT en cookie y su fila en `profiles`. Juega como cualquiera y el Nav le llama `INVITADO`, pero no guarda nada ni puede convertirse todavía en cuenta permanente — si se registra estando dentro, crea una cuenta nueva y la anónima queda huérfana. El `username` que el trigger le asigna (`INV70A7E1D`) es técnico y no se enseña: lo decide `displayName()` en `lib/supabase/user.ts`.
 
 La sesión vive en cookies, la refresca `proxy.ts` en cada petición y `app/layout.tsx` la resuelve en servidor. `/jugar/[id]` es la única ruta protegida: sin sesión redirige a `/auth?next=/jugar/<id>` y vuelve al juego tras entrar.
 
@@ -94,8 +95,19 @@ Los paneles son manuales; el repo no puede automatizarlos.
 1. **GitHub** → Settings → Developer settings → OAuth Apps → New OAuth App.
    **Google** → Google Cloud Console → APIs & Services → Credentials → OAuth client ID.
 2. En ambos, la **Authorization callback URL** es `<SUPABASE_URL>/auth/v1/callback`.
-3. Pega el *client id* y el *client secret* en Supabase → Authentication → Providers.
+3. Pega el _client id_ y el _client secret_ en Supabase → Authentication → Providers.
 4. En Supabase → Authentication → URL Configuration, añade a **Redirect URLs** las de tu aplicación (en local, `http://127.0.0.1:3000/**` y `http://127.0.0.1:3100/**`).
+
+### Activar el modo invitado
+
+En local lo enciende `enable_anonymous_sign_ins = true` en `supabase/config.toml`, y **hace falta `npx supabase stop && npx supabase start`**: `db reset` no recoge ese flag. En el proyecto remoto es otro interruptor manual, Authentication → Sign In / Providers → Anonymous. Si se olvida, el botón pinta `EL MODO INVITADO NO ESTÁ DISPONIBLE` en vez de romperse.
+
+Cada clic crea una fila en `auth.users`. El rate limit por IP (`anonymous_users` en `[auth.rate_limit]`) contiene el abuso; en producción conviene además barrer los caducados de vez en cuando, que se llevan su perfil por cascada:
+
+```sql
+delete from auth.users
+where is_anonymous is true and created_at < now() - interval '30 days';
+```
 
 ### Plantilla del correo de confirmación
 
@@ -103,31 +115,31 @@ Vive en `supabase/templates/confirmation.html` y `supabase/config.toml` la enlaz
 
 ## Comandos
 
-| Comando | Qué hace |
-| --- | --- |
-| `npm run dev` | Servidor de desarrollo. También regenera el bloque `nextjs-agent-rules` de `AGENTS.md`. |
-| `npm run build` | Compilación de producción. |
-| `npm run start` | Sirve la compilación de producción (requiere un `build` previo). |
-| `npm run lint` | ESLint con configuración plana; recorre todo el proyecto, sin argumento `--dir`. |
-| `npm test` | Suite de Playwright completa, proyectos `desktop` y `mobile`. Su `pretest` resetea la base local, así que **exige el stack de Supabase arrancado**. |
-| `npm run test:update` | Igual, pero regenerando las capturas de referencia. |
-| `npx tsc --noEmit` | Comprobación de tipos. No hay script de npm para esto. |
-| `npx supabase start` / `stop` | Levanta o para el stack local (Postgres, Auth, Studio, Mailpit). |
-| `npx supabase db reset` | Recrea la base local: migración de `supabase/migrations/` más `supabase/seed.sql`. |
+| Comando                       | Qué hace                                                                                                                                            |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                 | Servidor de desarrollo. También regenera el bloque `nextjs-agent-rules` de `AGENTS.md`.                                                             |
+| `npm run build`               | Compilación de producción.                                                                                                                          |
+| `npm run start`               | Sirve la compilación de producción (requiere un `build` previo).                                                                                    |
+| `npm run lint`                | ESLint con configuración plana; recorre todo el proyecto, sin argumento `--dir`.                                                                    |
+| `npm test`                    | Suite de Playwright completa, proyectos `desktop` y `mobile`. Su `pretest` resetea la base local, así que **exige el stack de Supabase arrancado**. |
+| `npm run test:update`         | Igual, pero regenerando las capturas de referencia.                                                                                                 |
+| `npx tsc --noEmit`            | Comprobación de tipos. No hay script de npm para esto.                                                                                              |
+| `npx supabase start` / `stop` | Levanta o para el stack local (Postgres, Auth, Studio, Mailpit).                                                                                    |
+| `npx supabase db reset`       | Recrea la base local: migración de `supabase/migrations/` más `supabase/seed.sql`.                                                                  |
 
 ## Pantallas
 
-| Ruta | Fichero | Qué muestra |
-| --- | --- | --- |
-| `/` | `app/page.tsx` | Portada: hero, por qué Arcade Vault, avance de seis juegos, cifras, actividad en vivo, precios y llamada final. |
-| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos. |
-| `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe. |
+| Ruta          | Fichero                   | Qué muestra                                                                                                                               |
+| ------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`           | `app/page.tsx`            | Portada: hero, por qué Arcade Vault, avance de seis juegos, cifras, actividad en vivo, precios y llamada final.                           |
+| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos.                                                             |
+| `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe.         |
 | `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: pantalla CRT animada, HUD con puntuación y vidas, pausa, `FIN` y modal de fin de partida. `notFound()` si el `id` no existe. |
-| `/auth` | `app/auth/page.tsx` | Entrar o crear cuenta. Crea la sesión falsa y vuelve a la biblioteca. |
-| `/salon` | `app/salon/page.tsx` | Salón de la Fama: podio, tabla de puntuaciones y selector de juego. |
-| `/acerca` | `app/acerca/page.tsx` | Acerca de: misión, destacados y formulario de contacto que envía por Resend. |
-| — | `app/not-found.tsx` | Pantalla 404 con el tema arcade. |
-| — | `app/error.tsx` | Límite de error de React con botón de reintento. |
+| `/auth`       | `app/auth/page.tsx`       | Entrar, crear cuenta o jugar como invitado contra Supabase Auth. Aterriza en `?next=` o, si no lo hay, en la biblioteca.                                                                     |
+| `/salon`      | `app/salon/page.tsx`      | Salón de la Fama: podio, tabla de puntuaciones y selector de juego.                                                                       |
+| `/acerca`     | `app/acerca/page.tsx`     | Acerca de: misión, destacados y formulario de contacto que envía por Resend.                                                              |
+| —             | `app/not-found.tsx`       | Pantalla 404 con el tema arcade.                                                                                                          |
+| —             | `app/error.tsx`           | Límite de error de React con botón de reintento.                                                                                          |
 
 Las URL están en español a propósito y coinciden con la maqueta original.
 
@@ -196,10 +208,10 @@ La suite vive entera en `tests/screens.spec.ts` y cubre humo, interacción y com
 
 Dos proyectos, ambos sobre Chromium (`playwright.config.ts`):
 
-| Proyecto | Viewport |
-| --- | --- |
-| `desktop` | 1440 × 900 |
-| `mobile` | iPhone 13 emulado (390 × 844) |
+| Proyecto  | Viewport                      |
+| --------- | ----------------------------- |
+| `desktop` | 1440 × 900                    |
+| `mobile`  | iPhone 13 emulado (390 × 844) |
 
 El `webServer` de Playwright ejecuta `npm run build` y luego `next start -p 3100`, así que la primera ejecución tarda: se prueba contra la compilación de producción, no contra el servidor de desarrollo. Ese `webServer` fija las dos variables `NEXT_PUBLIC_SUPABASE_*` **del stack local**: son `NEXT_PUBLIC_*` y se incrustan en ese `build`, así que sin ellas la suite compilaría contra el proyecto remoto y crearía usuarios de verdad en cada ejecución.
 
@@ -236,14 +248,15 @@ npx skills@latest add Klerith/fernando-skills
 
 ### Specs
 
-| Spec | Estado | Depende de |
-| --- | --- | --- |
-| [01 — MVP visual de las pantallas](specs/01-mvp-pantallas-visuales.md) | Implementado | — |
-| [02 — Barra móvil: sesión en la hamburguesa](specs/02-nav-movil-sesion-en-hamburguesa.md) | Implementado | SPEC 01 |
-| [03 — Documentación del repo](specs/03-documentacion-readme-y-claude.md) | Implementado | SPEC 01, SPEC 02 |
-| [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md) | Implementado | SPEC 01, SPEC 02, SPEC 03 |
-| [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md) | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04 |
-| [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md) | Implementado | SPEC 01–05 |
+| Spec                                                                                            | Estado       | Depende de                         |
+| ----------------------------------------------------------------------------------------------- | ------------ | ---------------------------------- |
+| [01 — MVP visual de las pantallas](specs/01-mvp-pantallas-visuales.md)                          | Implementado | —                                  |
+| [02 — Barra móvil: sesión en la hamburguesa](specs/02-nav-movil-sesion-en-hamburguesa.md)       | Implementado | SPEC 01                            |
+| [03 — Documentación del repo](specs/03-documentacion-readme-y-claude.md)                        | Implementado | SPEC 01, SPEC 02                   |
+| [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md) | Implementado | SPEC 01, SPEC 02, SPEC 03          |
+| [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md)                  | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04 |
+| [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md)                          | Implementado | SPEC 01–05                         |
+| [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md) | Implementado | SPEC 06 |
 
 ## Referencias
 

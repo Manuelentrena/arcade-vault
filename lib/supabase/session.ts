@@ -1,11 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SessionUser } from "@/lib/supabase/user";
 
-export type SessionUser = {
-  id: string;
-  /** profiles.username: mayúsculas, 2-10 caracteres, único. */
-  name: string;
-  email: string | null;
-};
+export type { SessionUser };
 
 /**
  * Sesión leída en servidor desde las cookies. null si no hay.
@@ -20,8 +16,12 @@ export async function getServerSession(): Promise<SessionUser | null> {
   if (error || !data?.claims?.sub) return null;
 
   const id = data.claims.sub;
+  // Una sesión anónima trae email como cadena vacía, no como null.
   const email =
-    typeof data.claims.email === "string" ? data.claims.email : null;
+    typeof data.claims.email === "string" && data.claims.email !== ""
+      ? data.claims.email
+      : null;
+  const isGuest = data.claims.is_anonymous === true;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -32,5 +32,5 @@ export async function getServerSession(): Promise<SessionUser | null> {
   // Sin perfil no hay nombre que pintar: se trata como sesión inexistente.
   if (!profile) return null;
 
-  return { id, name: profile.username, email };
+  return { id, name: profile.username, email, isGuest };
 }

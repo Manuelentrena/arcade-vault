@@ -150,6 +150,18 @@ async function signIn(page: Page, next = "/biblioteca") {
   await expect(page).toHaveURL(next, { timeout: NAV_TIMEOUT });
 }
 
+/**
+ * Entra como invitado: una sesión anónima de Supabase, sin correo ni
+ * contraseña. `next` es la ruta a la que debe aterrizar, que `playAsGuest`
+ * saca de `?next=` igual que el envío del formulario.
+ */
+async function playAsGuest(page: Page, next = "/biblioteca") {
+  await page.goto(next === "/biblioteca" ? "/auth" : `/auth?next=${next}`);
+  await authReady(page);
+  await page.getByRole("button", { name: "JUGAR COMO INVITADO" }).click();
+  await expect(page).toHaveURL(next, { timeout: NAV_TIMEOUT });
+}
+
 /** Mailpit: el buzón del stack local. Sin límite de envíos y sin salir de la máquina. */
 const MAILPIT = "http://127.0.0.1:54324";
 
@@ -488,7 +500,9 @@ test.describe("auth", () => {
     await page.getByRole("button", { name: "CREAR CUENTA" }).click();
     // PX_KAI lo siembra supabase/seed.sql.
     await page.getByLabel("Usuario").fill("px_kai");
-    await page.getByLabel("Correo electrónico").fill(`libre-${unique()}@vault.test`);
+    await page
+      .getByLabel("Correo electrónico")
+      .fill(`libre-${unique()}@vault.test`);
     await page.getByLabel("Contraseña").fill(SEED_PASSWORD);
     await page.getByRole("button", { name: "CREAR Y JUGAR" }).click();
 
@@ -532,15 +546,49 @@ test.describe("auth", () => {
     await expect(page.locator(".auth-btn")).toHaveText("Iniciar Sesión");
   });
 
-  test("JUGAR COMO INVITADO vuelve a la biblioteca sin sesión", async ({
+  test("JUGAR COMO INVITADO abre sesión anónima", async ({ page }) => {
+    await playAsGuest(page);
+
+    // El trigger le pone un username técnico (INV…) que no debe verse: el Nav
+    // pinta INVITADO por displayName().
+    await expect(page.locator(".auth-btn").first()).toHaveText("INVITADO ▾");
+  });
+
+  test("el invitado entra en /jugar sin pasar por el formulario", async ({
     page,
   }) => {
-    await page.goto("/auth");
+    await page.goto("/jugar/bloque-buster");
+    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fbloque-buster");
+
     await authReady(page);
     await page.getByRole("button", { name: "JUGAR COMO INVITADO" }).click();
 
-    await expect(page).toHaveURL("/biblioteca", { timeout: NAV_TIMEOUT });
-    await expect(page.locator(".auth-btn").first()).not.toHaveText(/▾/);
+    // Vuelve al juego que pidió, no a la biblioteca.
+    await expect(page).toHaveURL("/jugar/bloque-buster", {
+      timeout: NAV_TIMEOUT,
+    });
+    await expect(page.locator(".auth-btn").first()).toHaveText("INVITADO ▾");
+    // El HUD del reproductor sale del mismo displayName().
+    await expect(page.locator(".hud-stat").first().locator(".v")).toHaveText(
+      "INVITADO",
+    );
+  });
+
+  test("la sesión de invitado sobrevive a la recarga y se puede cerrar", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(
+      isMobile,
+      "el control de sesión vive en el panel, ver responsive",
+    );
+
+    await playAsGuest(page);
+    await page.reload();
+    await expect(page.locator(".auth-btn")).toHaveText("INVITADO ▾");
+
+    await page.locator(".auth-btn").click();
+    await expect(page.locator(".auth-btn")).toHaveText("Iniciar Sesión");
   });
 
   test("/jugar sin sesión manda a /auth y vuelve al juego al entrar", async ({
@@ -819,6 +867,16 @@ test.describe("responsive", () => {
     await expect(
       panel.getByRole("link", { name: "INICIAR SESIÓN" }),
     ).toBeVisible();
+  });
+
+  test("el panel llama INVITADO al invitado", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "solo aplica al proyecto mobile");
+
+    await playAsGuest(page);
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+    await expect(page.locator(".av-mobile-panel .panel-user")).toHaveText(
+      "INVITADO",
+    );
   });
 
   for (const route of ROUTES) {
