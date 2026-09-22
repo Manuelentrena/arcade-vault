@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
 import type { Game } from "@/lib/games";
-import { normalizeName } from "@/lib/session";
+
+/** Mismo invariante que profiles.username: mayúsculas y máximo 10 caracteres. */
+function normalizeName(name: string): string {
+  return name.trim().toUpperCase().slice(0, 10);
+}
 
 const LIVES = 3;
 const TICK_MS = 220;

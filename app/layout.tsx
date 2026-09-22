@@ -3,6 +3,7 @@ import { Press_Start_2P, JetBrains_Mono } from "next/font/google";
 import { Footer } from "@/components/footer";
 import { Nav } from "@/components/nav";
 import { SessionProvider } from "@/components/session-provider";
+import { getServerSession } from "@/lib/supabase/session";
 import "./globals.css";
 
 const pressStart = Press_Start_2P({
@@ -23,7 +24,11 @@ export const metadata: Metadata = {
   description: "Compite por las mejores puntuaciones en clásicos arcade.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Resolver la sesión aquí vuelve dinámicas las siete rutas. Es el precio de
+// que el nav salga ya con el nombre puesto en el primer HTML.
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const initialUser = await getServerSession();
+
   return (
     <html
       lang="es"
@@ -32,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <div className="av-bg" aria-hidden />
         <div className="av-noise" aria-hidden />
-        <SessionProvider>
+        <SessionProvider initialUser={initialUser}>
           <div className="av-shell">
             <Nav />
             <main className="av-main">{children}</main>
