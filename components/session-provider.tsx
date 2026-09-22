@@ -1,50 +1,86 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
-  useSyncExternalStore,
+  useState,
 } from "react";
-import {
-  getServerSessionSnapshot,
-  getSessionSnapshot,
-  normalizeName,
-  subscribeSession,
-  writeSession,
-  type SessionUser,
-} from "@/lib/session";
+import { createClient } from "@/lib/supabase/client";
+import type { SessionUser } from "@/lib/supabase/session";
 
 type SessionContextValue = {
   user: SessionUser | null;
-  signIn: (name: string) => void;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-export function SessionProvider({ children }: { children: React.ReactNode }) {
-  // El servidor y la primera hidratación ven null; React vuelve a leer
-  // localStorage justo después, sin desajuste de hidratación.
-  const user = useSyncExternalStore(
-    subscribeSession,
-    getSessionSnapshot,
-    getServerSessionSnapshot,
-  );
+export function SessionProvider({
+  initialUser,
+  children,
+}: {
+  initialUser: SessionUser | null;
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  // El servidor ya resolvió la sesión desde las cookies, así que el primer
+  // HTML sale con el nombre puesto y el nav no parpadea al hidratar.
+  const [user, setUser] = useState<SessionUser | null>(initialUser);
 
-  const signIn = useCallback((name: string) => {
-    writeSession({ name: normalizeName(name) });
+  // Ajuste en render, no en efecto: cuando el servidor vuelve a resolver la
+  // sesión (navegación o router.refresh), su valor manda sobre el del cliente.
+  const [lastInitial, setLastInitial] = useState(initialUser);
+  if (initialUser !== lastInitial) {
+    setLastInitial(initialUser);
+    setUser(initialUser);
+  }
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setUser(null);
+        return;
+      }
+      // El nombre visible vive en profiles, no en el JWT: se consulta aparte.
+      void supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", session.user.id)
+        .single()
+        .then(({ data }) => {
+          setUser(
+            data
+              ? {
+                  id: session.user.id,
+                  name: data.username,
+                  email: session.user.email ?? null,
+                }
+              : null,
+          );
+        });
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const signOut = useCallback(() => {
-    writeSession(null);
-  }, []);
+  const signOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUser(null);
+    // Los componentes de servidor cachean initialUser: sin refresh, una ruta
+    // ya renderizada seguiría pintando al usuario que acaba de salir.
+    router.refresh();
+  }, [router]);
 
-  const value = useMemo(
-    () => ({ user, signIn, signOut }),
-    [user, signIn, signOut],
-  );
+  const value = useMemo(() => ({ user, signOut }), [user, signOut]);
 
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

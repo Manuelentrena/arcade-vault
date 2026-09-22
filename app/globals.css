@@ -2754,6 +2754,10 @@
 .contact-form.shake {
   animation: shake 0.4s;
 }
+/* Mismo rechazo local en /auth: validación fallida, ninguna petición. */
+.auth-card.shake {
+  animation: shake 0.4s;
+}
 @keyframes shake {
   0%,
   100% {
