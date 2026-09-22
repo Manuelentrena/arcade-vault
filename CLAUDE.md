@@ -10,7 +10,7 @@ Arcade Vault — an arcade gaming platform where players compete for high scores
 
 Most of what sits below the UI is still simulated: the eight games are decorative (no game engine — the player animates a CRT scene and increments the score on a timer), and leaderboard rows are produced by a deterministic LCG in `lib/scores.ts` and never persisted. Treat those as deliberate boundaries; a spec decides when one of them changes.
 
-**Authentication is the exception — it is real.** SPEC 06 replaced the fake session with Supabase Auth: email/password with mandatory email confirmation, Google and GitHub OAuth, a `public.profiles` table under RLS, and cookies refreshed by `proxy.ts`. The session lives in cookies, never in `localStorage`; `lib/session.ts` and the `av_user` key are gone. `/jugar/[id]` is the only protected route.
+**Authentication is the exception — it is real.** SPEC 06 replaced the fake session with Supabase Auth: email/password with mandatory email confirmation, Google and GitHub OAuth, a `public.profiles` table under RLS, and cookies refreshed by `proxy.ts`. The session lives in cookies, never in `localStorage`; `lib/session.ts` and the `av_user` key are gone. `/jugar/[id]` is the only protected route. SPEC 07 added guest access on top: `JUGAR COMO INVITADO` calls `signInAnonymously()`, so a guest is a real user with `is_anonymous: true` — same cookie, same proxy, same `profiles` row. The trigger gives them a technical username (`INV70A7E1D`) that is never shown.
 
 The project follows **spec-driven development**. Write a spec before implementing a feature — see the spec workflow section below.
 
@@ -71,7 +71,7 @@ Plus `lib/supabase/`, which is not mock data:
 - `session.ts` — `SessionUser` (`id`, `name`, `email`) and `getServerSession()`, which verifies the JWT with `getClaims()` and then reads `profiles.username`.
 - `types.ts` — generated with `npx supabase gen types typescript`. It is committed; regenerate it whenever the schema changes.
 
-**Session rule:** components read session state through `useSession()` from `components/session-provider.tsx`; server code uses `getServerSession()`. `app/layout.tsx` resolves the session once and hands it to the provider as `initialUser`, so the first HTML already carries the name — which is also why all seven routes are dynamic. Never talk to Supabase auth directly from a component that only needs to know who is signed in, and never reintroduce a second source of truth in `localStorage`.
+**Session rule:** components read session state through `useSession()` from `components/session-provider.tsx`; server code uses `getServerSession()`. `app/layout.tsx` resolves the session once and hands it to the provider as `initialUser`, so the first HTML already carries the name — which is also why all seven routes are dynamic. Never talk to Supabase auth directly from a component that only needs to know who is signed in, and never reintroduce a second source of truth in `localStorage`. The name you paint comes from `displayName(user)` in `lib/supabase/user.ts`, never from `user.name` directly — that is what keeps a guest's technical username off the screen.
 
 **Schema changes** go in a migration under `supabase/migrations/`, never as an ad-hoc statement against the database: `npx supabase db reset` replays them locally and is what `pretest` runs.
 
