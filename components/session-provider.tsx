@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { SessionUser } from "@/lib/supabase/session";
+import type { SessionUser } from "@/lib/supabase/user";
 
 type SessionContextValue = {
   user: SessionUser | null;
@@ -61,7 +61,8 @@ export function SessionProvider({
               ? {
                   id: session.user.id,
                   name: data.username,
-                  email: session.user.email ?? null,
+                  email: session.user.email || null,
+                  isGuest: session.user.is_anonymous ?? false,
                 }
               : null,
           );

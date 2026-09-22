@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
+import { displayName } from "@/lib/supabase/user";
 
 type Section = "inicio" | "biblioteca" | "salon" | "acerca";
 
@@ -73,7 +74,7 @@ export function Nav() {
 
         {user ? (
           <button className="btn ghost auth-btn" onClick={signOut}>
-            {user.name} ▾
+            {displayName(user)} ▾
           </button>
         ) : (
           <Link className="btn auth-btn" href="/auth">
@@ -140,7 +141,7 @@ export function Nav() {
         <div className="panel-session">
           {user ? (
             <>
-              <div className="panel-user">{user.name}</div>
+              <div className="panel-user">{displayName(user)}</div>
               <button
                 className="btn ghost"
                 onClick={() => {

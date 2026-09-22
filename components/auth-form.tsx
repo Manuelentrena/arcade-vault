@@ -37,6 +37,11 @@ function translate(message: string): string {
   ) {
     return "ESE ACCESO NO ESTÁ DISPONIBLE AÚN";
   }
+  // Sesiones anónimas apagadas: en local es un flag de config.toml, en el
+  // proyecto remoto un interruptor del panel que es fácil olvidar.
+  if (m.includes("anonymous sign-ins are disabled")) {
+    return "EL MODO INVITADO NO ESTÁ DISPONIBLE";
+  }
   return FALLBACK_ERROR;
 }
 
@@ -188,8 +193,17 @@ export function AuthForm() {
 
   const playAsGuest = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push(HOME);
+    // Sin pasar por "sending": ese estado reetiqueta el botón de envío del
+    // formulario ("VERIFICANDO…"), que no es lo que se está haciendo.
+    const { error: authError } = await supabase.auth.signInAnonymously();
+    if (authError) {
+      fail(translate(authError.message), authError);
+      return;
+    }
+
+    // `next`, no HOME: a quien el proxy rebotó desde /jugar/[id] se le
+    // devuelve al juego que pidió, no a la biblioteca.
+    router.push(next);
     router.refresh();
   };
 

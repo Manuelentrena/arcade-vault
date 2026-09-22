@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
 import type { Game } from "@/lib/games";
+import { displayName } from "@/lib/supabase/user";
 
 /** Mismo invariante que profiles.username: mayúsculas y máximo 10 caracteres. */
 function normalizeName(name: string): string {
@@ -26,7 +27,9 @@ export function GamePlayer({ game }: { game: Game }) {
   // null = todavía no editado: se muestra el nombre de la sesión.
   const [editedName, setEditedName] = useState<string | null>(null);
 
-  const name = editedName ?? user?.name ?? "INVITADO";
+  // /jugar/[id] está detrás del proxy, así que aquí siempre hay sesión: la
+  // rama sin usuario sólo existe porque useSession() la admite en el tipo.
+  const name = editedName ?? (user ? displayName(user) : "INVITADO");
 
   useEffect(() => {
     if (over || paused) return;
