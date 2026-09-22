@@ -83,6 +83,10 @@ const CLOCK_START = new Date("2026-09-15T12:00:00Z");
 const CLOCK_PAUSE = new Date(CLOCK_START.getTime() + 60_000);
 
 async function openPlayer(page: Page, path = "/jugar/serpentina") {
+  // /jugar/[id] está detrás del proxy. Se entra antes de congelar el reloj:
+  // con el reloj ya parado, el cliente de Supabase vería el token recién
+  // emitido fuera de su ventana de validez.
+  await signIn(page);
   await page.clock.install({ time: CLOCK_START });
   await page.goto(path);
   await page.clock.pauseAt(CLOCK_PAUSE);
@@ -117,11 +121,73 @@ function scoreOf(text: string): number {
   return Number(text.replace(/\D/g, ""));
 }
 
-async function signIn(page: Page, name = "px_kai") {
-  await page.goto("/auth");
-  await page.getByLabel("Usuario").fill(name);
+/** Credenciales del usuario que siembra supabase/seed.sql. */
+const SEED_EMAIL = "px_kai@vault.test";
+const SEED_PASSWORD = "arcade-vault-test";
+
+/**
+ * Espera a que React monte el formulario de /auth.
+ *
+ * El HTML del servidor ya trae el `<form>`, así que un clic anterior a la
+ * hidratación dispara el envío nativo del navegador: la página recarga, no
+ * pasa nada y la prueba se queda en /auth. Cambiar de pestaña sólo lo sabe
+ * hacer React, así que ver aparecer el campo Usuario es la prueba de que el
+ * árbol ya es interactivo.
+ */
+async function authReady(page: Page) {
+  await page.getByRole("button", { name: "CREAR CUENTA" }).click();
+  await expect(page.getByLabel("Usuario")).toBeVisible();
+  await page.getByRole("button", { name: "INICIAR SESIÓN" }).click();
+  await expect(page.getByLabel("Usuario")).toBeHidden();
+}
+
+async function signIn(page: Page, next = "/biblioteca") {
+  await page.goto(next === "/biblioteca" ? "/auth" : `/auth?next=${next}`);
+  await authReady(page);
+  await page.getByLabel("Correo electrónico").fill(SEED_EMAIL);
+  await page.getByLabel("Contraseña").fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "ENTRAR AL VAULT" }).click();
-  await expect(page).toHaveURL("/biblioteca");
+  await expect(page).toHaveURL(next, { timeout: NAV_TIMEOUT });
+}
+
+/** Mailpit: el buzón del stack local. Sin límite de envíos y sin salir de la máquina. */
+const MAILPIT = "http://127.0.0.1:54324";
+
+/**
+ * Sufijo único por prueba. Los dos proyectos corren en paralelo contra la
+ * misma base: sin esto, el segundo encontraría el nombre ya ocupado.
+ */
+function unique(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
+/**
+ * Enlace de confirmación del último correo dirigido a `email`.
+ * Se busca por destinatario, no "el último mensaje": el otro proyecto puede
+ * estar registrando a la vez.
+ */
+async function confirmationLink(page: Page, email: string): Promise<string> {
+  const search = `${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`;
+
+  const id = await expect
+    .poll(
+      async () => {
+        const response = await page.request.get(search);
+        const body = await response.json();
+        return (body.messages?.[0]?.ID as string | undefined) ?? "";
+      },
+      { timeout: 20_000, message: `Mailpit no recibió nada para ${email}` },
+    )
+    .not.toBe("")
+    .then(() => page.request.get(search))
+    .then((response) => response.json())
+    .then((body) => body.messages[0].ID as string);
+
+  const message = await page.request.get(`${MAILPIT}/api/v1/message/${id}`);
+  const html = (await message.json()).HTML as string;
+  const href = /href="([^"]+)"/.exec(html)?.[1];
+  expect(href, "el correo trae enlace de confirmación").toBeTruthy();
+  return href!.replace(/&amp;/g, "&");
 }
 
 test.describe("capturas de referencia", () => {
@@ -129,7 +195,12 @@ test.describe("capturas de referencia", () => {
     test(`${route.name} coincide con su captura`, async ({ page }) => {
       // La partida avanza sola con puntuación aleatoria: se congela para que la
       // captura no dependa del tiempo de carga.
-      if (route.name === "reproductor") await freezeRun(page);
+      if (route.name === "reproductor") {
+        await freezeRun(page);
+        // /jugar/[id] está detrás del proxy: sin sesión la captura saldría
+        // del formulario de acceso.
+        await signIn(page);
+      }
       await page.goto(route.path);
       await ready(page);
       if (route.name === "home" || route.name === "acerca") {
@@ -343,25 +414,89 @@ test.describe("reproductor", () => {
   });
 
   test("un id desconocido devuelve 404", async ({ page }) => {
+    // Con sesión: sin ella el proxy redirige a /auth antes de llegar al 404.
+    await signIn(page);
     const response = await page.goto("/jugar/no-existe");
     expect(response?.status()).toBe(404);
   });
 });
 
 test.describe("auth", () => {
-  test("la pestaña CREAR CUENTA añade el correo", async ({ page }) => {
+  test("la pestaña CREAR CUENTA añade el usuario", async ({ page }) => {
     await page.goto("/auth");
+    // Entrar pide correo y contraseña: el nombre no identifica a nadie en
+    // signInWithPassword y resolverlo obligaría a exponer los correos.
     await expect(page.locator(".field")).toHaveCount(2);
+    await expect(page.getByLabel("Correo electrónico")).toBeVisible();
 
     await page.getByRole("button", { name: "CREAR CUENTA" }).click();
     await expect(page.locator(".field")).toHaveCount(3);
-    await expect(page.getByLabel("Correo electrónico")).toBeVisible();
+    await expect(page.getByLabel("Usuario")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "CREAR Y JUGAR" }),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "INICIAR SESIÓN" }).click();
     await expect(page.locator(".field")).toHaveCount(2);
+  });
+
+  test("un envío incompleto sacude la tarjeta y no sale del navegador", async ({
+    page,
+  }) => {
+    const calls: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/auth/v1/")) calls.push(request.url());
+    });
+
+    await page.goto("/auth");
+    await authReady(page);
+    await page.getByRole("button", { name: "ENTRAR AL VAULT" }).click();
+
+    await expect(page.locator(".auth-card")).toHaveClass(/shake/);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("una contraseña incorrecta devuelve el terminal rojo", async ({
+    page,
+  }) => {
+    await page.goto("/auth");
+    await authReady(page);
+    await page.getByLabel("Correo electrónico").fill(SEED_EMAIL);
+    await page.getByLabel("Contraseña").fill("no-es-la-buena");
+    await page.getByRole("button", { name: "ENTRAR AL VAULT" }).click();
+
+    await expect(page.locator(".terminal-success.error")).toBeVisible();
+    await expect(page.locator(".term-body .success")).toContainText(
+      "CORREO O CONTRASEÑA INCORRECTOS",
+    );
+
+    // REINTENTAR vuelve al formulario con lo escrito intacto.
+    await page.getByRole("button", { name: "REINTENTAR" }).click();
+    await expect(page.getByLabel("Correo electrónico")).toHaveValue(SEED_EMAIL);
+  });
+
+  test("un nombre ocupado no llega a Supabase", async ({ page }) => {
+    const signupCalls: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/auth/v1/signup")) {
+        signupCalls.push(request.url());
+      }
+    });
+
+    await page.goto("/auth");
+    await authReady(page);
+    await page.getByRole("button", { name: "CREAR CUENTA" }).click();
+    // PX_KAI lo siembra supabase/seed.sql.
+    await page.getByLabel("Usuario").fill("px_kai");
+    await page.getByLabel("Correo electrónico").fill(`libre-${unique()}@vault.test`);
+    await page.getByLabel("Contraseña").fill(SEED_PASSWORD);
+    await page.getByRole("button", { name: "CREAR Y JUGAR" }).click();
+
+    await expect(page.locator(".terminal-success.error")).toBeVisible();
+    await expect(page.locator(".term-body .success")).toContainText(
+      "ESE NOMBRE YA ESTÁ PILLADO",
+    );
+    expect(signupCalls).toHaveLength(0);
   });
 
   test("entrar deja la sesión en el Nav y sobrevive a la recarga", async ({
@@ -380,7 +515,10 @@ test.describe("auth", () => {
     await expect(page.locator(".auth-btn")).toHaveText("PX_KAI ▾");
   });
 
-  test("cerrar sesión borra av_user", async ({ page, isMobile }) => {
+  test("cerrar sesión deja el Nav sin usuario y la recarga no lo resucita", async ({
+    page,
+    isMobile,
+  }) => {
     test.skip(
       isMobile,
       "el control de sesión vive en el panel, ver responsive",
@@ -390,20 +528,75 @@ test.describe("auth", () => {
     await page.locator(".auth-btn").click();
 
     await expect(page.locator(".auth-btn")).toHaveText("Iniciar Sesión");
-    const stored = await page.evaluate(() => localStorage.getItem("av_user"));
-    expect(stored).toBeNull();
+    await page.reload();
+    await expect(page.locator(".auth-btn")).toHaveText("Iniciar Sesión");
   });
 
   test("JUGAR COMO INVITADO vuelve a la biblioteca sin sesión", async ({
     page,
   }) => {
     await page.goto("/auth");
+    await authReady(page);
     await page.getByRole("button", { name: "JUGAR COMO INVITADO" }).click();
 
-    await expect(page).toHaveURL("/biblioteca");
-    expect(
-      await page.evaluate(() => localStorage.getItem("av_user")),
-    ).toBeNull();
+    await expect(page).toHaveURL("/biblioteca", { timeout: NAV_TIMEOUT });
+    await expect(page.locator(".auth-btn").first()).not.toHaveText(/▾/);
+  });
+
+  test("/jugar sin sesión manda a /auth y vuelve al juego al entrar", async ({
+    page,
+  }) => {
+    await page.goto("/jugar/bloque-buster");
+    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fbloque-buster");
+
+    await authReady(page);
+    await page.getByLabel("Correo electrónico").fill(SEED_EMAIL);
+    await page.getByLabel("Contraseña").fill(SEED_PASSWORD);
+    await page.getByRole("button", { name: "ENTRAR AL VAULT" }).click();
+
+    await expect(page).toHaveURL("/jugar/bloque-buster", {
+      timeout: NAV_TIMEOUT,
+    });
+  });
+
+  test("las demás rutas siguen abiertas sin sesión", async ({ page }) => {
+    for (const route of ROUTES.filter((r) => r.name !== "reproductor")) {
+      const response = await page.goto(route.path);
+      expect(response?.status(), route.path).toBe(200);
+      await expect(page).toHaveURL(route.path);
+    }
+  });
+});
+
+test.describe("registro por correo", () => {
+  test("el enlace de Mailpit confirma la cuenta y deja dentro", async ({
+    page,
+  }) => {
+    const tag = unique();
+    const username = `nv_${tag}`.slice(0, 10);
+    const email = `${username}@vault.test`;
+
+    await page.goto("/auth");
+    await authReady(page);
+    await page.getByRole("button", { name: "CREAR CUENTA" }).click();
+    await page.getByLabel("Usuario").fill(username);
+    await page.getByLabel("Correo electrónico").fill(email);
+    await page.getByLabel("Contraseña").fill(SEED_PASSWORD);
+    await page.getByRole("button", { name: "CREAR Y JUGAR" }).click();
+
+    const terminal = page.locator(".terminal-success");
+    await expect(terminal).toBeVisible();
+    await expect(terminal).not.toHaveClass(/error/);
+    await expect(page.locator(".term-body .success")).toContainText(
+      "REVISA TU CORREO",
+    );
+
+    // El enlace lleva a /auth/confirm, que canjea el token y monta la sesión.
+    await page.goto(await confirmationLink(page, email));
+    await expect(page).toHaveURL("/biblioteca", { timeout: NAV_TIMEOUT });
+    await expect(page.locator(".auth-btn, .panel-user").first()).toContainText(
+      username.toUpperCase(),
+    );
   });
 });
 
@@ -456,6 +649,9 @@ test.describe("acerca", () => {
     });
 
     await page.goto("/acerca");
+    // El rechazo local lo hace React: un clic anterior a la hidratación envía
+    // el formulario de verdad y nunca pinta la sacudida.
+    await hydrated(page);
     await page.getByRole("button", { name: /ENVIAR MENSAJE/ }).click();
 
     await expect(page.locator(".contact-form")).toHaveClass(/shake/);
@@ -611,10 +807,14 @@ test.describe("responsive", () => {
 
     await panel.getByRole("button", { name: "CERRAR SESIÓN" }).click();
     await expect(panel).not.toHaveClass(/open/);
-    expect(
-      await page.evaluate(() => localStorage.getItem("av_user")),
-    ).toBeNull();
 
+    await page.getByRole("button", { name: "Abrir menú" }).click();
+    await expect(
+      panel.getByRole("link", { name: "INICIAR SESIÓN" }),
+    ).toBeVisible();
+
+    // La sesión vive en cookies: una recarga no puede resucitarla.
+    await page.reload();
     await page.getByRole("button", { name: "Abrir menú" }).click();
     await expect(
       panel.getByRole("link", { name: "INICIAR SESIÓN" }),
@@ -628,6 +828,7 @@ test.describe("responsive", () => {
     }) => {
       test.skip(!isMobile, "solo aplica al proyecto mobile");
 
+      if (route.name === "reproductor") await signIn(page);
       await page.goto(route.path);
       await ready(page);
       const overflow = await page.evaluate(
