@@ -1,0 +1,23 @@
+<!--
+  Plantilla de confirmación de registro.
+  El enlace apunta a /auth/confirm de la aplicación, que canjea el token_hash
+  con verifyOtp y deja la sesión iniciada. Con la plantilla por defecto el
+  enlace va al verificador de Supabase y esa ruta nunca se ejecuta.
+
+  Se usa .RedirectTo (el emailRedirectTo que pasa signUp) y no .SiteURL: el
+  servidor de desarrollo y el de la suite escuchan en puertos distintos, y
+  con .SiteURL el correo enviado desde uno enlazaría siempre al otro.
+-->
+<h2 style="font-family: monospace; letter-spacing: 0.08em">ARCADE VAULT</h2>
+<p style="font-family: monospace">
+  Alguien ha creado una cuenta con este correo. Si has sido tú, confirma el
+  acceso:
+</p>
+<p style="font-family: monospace">
+  <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email"
+    >CONFIRMAR MI CUENTA</a
+  >
+</p>
+<p style="font-family: monospace; font-size: 12px; color: #888">
+  Si no has sido tú, ignora este mensaje: sin confirmar, la cuenta no entra.
+</p>
