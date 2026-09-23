@@ -231,9 +231,14 @@ token_verifications = 1000
 web3 = 30
 
 # Configure one of the supported captcha providers: `hcaptcha`, `turnstile`.
+#
+# Captcha del proyecto remoto (SPEC 09). Apagado en local a propósito:
+# encenderlo aquí obliga a la suite de Playwright a resolver un captcha real en
+# cada prueba de /auth. La clave secreta vive en el panel de Supabase
+# (Authentication → Attack Protection), nunca aquí.
 # [auth.captcha]
 # enabled = true
-# provider = "hcaptcha"
+# provider = "turnstile"
 # secret = ""
 
 [auth.email]

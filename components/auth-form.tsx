@@ -1,5 +1,6 @@
 "use client";
 
+import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -7,7 +8,47 @@ import { createClient } from "@/lib/supabase/client";
 type Tab = "in" | "up";
 type Status = "idle" | "sending" | "check-email" | "error";
 
+/**
+ * La porción de la API global de Turnstile que se usa aquí. El script la
+ * cuelga de `window` cuando aterriza; antes de eso es `undefined`, de ahí el
+ * opcional en la declaración.
+ */
+type Turnstile = {
+  render: (
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      theme?: "light" | "dark" | "auto";
+      appearance?: "always" | "execute" | "interaction-only";
+      callback?: (token: string) => void;
+      "expired-callback"?: () => void;
+      "error-callback"?: () => void;
+    },
+  ) => string;
+  reset: (widgetId: string) => void;
+  remove: (widgetId: string) => void;
+};
+
+declare global {
+  interface Window {
+    turnstile?: Turnstile;
+  }
+}
+
 const FALLBACK_ERROR = "ERROR DE CONEXIÓN CON EL VAULT";
+
+/**
+ * Clave pública del widget de Turnstile. Ausente = captcha ausente: no se carga
+ * el script, no se pinta nada y el token viaja como `undefined`. Eso es lo que
+ * deja intactos el stack local, la suite de Playwright y sus capturas.
+ *
+ * Se lee con la ruta completa a propósito: Next sustituye `process.env.X` por
+ * su literal al compilar, y sólo reconoce el acceso escrito así.
+ */
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
+const TURNSTILE_SRC =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 /** El destino por defecto tras entrar; `?next=` lo sobreescribe. */
 const HOME = "/biblioteca";
@@ -42,6 +83,11 @@ function translate(message: string): string {
   if (m.includes("anonymous sign-ins are disabled")) {
     return "EL MODO INVITADO NO ESTÁ DISPONIBLE";
   }
+  // Token ausente y token rechazado dan el mismo mensaje en Supabase:
+  // `captcha protection: request disallowed (...)`.
+  if (m.includes("captcha")) {
+    return "VERIFICACIÓN ANTI-BOT FALLIDA, INTÉNTALO DE NUEVO";
+  }
   return FALLBACK_ERROR;
 }
 
@@ -69,11 +115,71 @@ export function AuthForm() {
   const [shake, setShake] = useState(false);
   const shakeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Token de Turnstile. Vacío mientras Cloudflare no haya resuelto el reto, y
+  // siempre vacío si no hay clave pública.
+  const [captcha, setCaptcha] = useState("");
+  // El script es `lazyOnload`: hasta que `onReady` dispare, `window.turnstile`
+  // no existe y no hay nada que renderizar.
+  const [scriptReady, setScriptReady] = useState(false);
+  const captchaRef = useRef<HTMLDivElement | null>(null);
+  const widgetId = useRef<string | null>(null);
+
+  // El terminal — de éxito o de error — sustituye al formulario entero, y con
+  // él al contenedor del widget. Al volver hay que pintar uno nuevo.
+  const formVisible = status !== "check-email" && status !== "error";
+
   useEffect(() => {
     return () => {
       if (shakeTimer.current) clearTimeout(shakeTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    const el = captchaRef.current;
+    const turnstile = window.turnstile;
+    if (!TURNSTILE_SITE_KEY || !scriptReady || !el || !turnstile) return;
+
+    const id = turnstile.render(el, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: "dark",
+      // Invisible mientras Cloudflare resuelve solo; sólo se pinta si hace
+      // falta un humano. La tarjeta CRT se queda como está en el caso normal.
+      appearance: "interaction-only",
+      callback: (token) => setCaptcha(token),
+      "expired-callback": () => setCaptcha(""),
+      "error-callback": () => setCaptcha(""),
+    });
+    widgetId.current = id;
+
+    return () => {
+      widgetId.current = null;
+      setCaptcha("");
+      // El contenedor ya está desmontado cuando esto corre: si Turnstile se
+      // queja del hueco, el fallo no debe tumbar la pantalla de acceso.
+      try {
+        turnstile.remove(id);
+      } catch (caught) {
+        console.error(caught);
+      }
+    };
+  }, [scriptReady, formVisible]);
+
+  /**
+   * El token de Turnstile es de un solo uso y caduca a los cinco minutos. Tras
+   * cada intento — salga bien o mal — hay que pedir uno nuevo: sin esto, el
+   * segundo envío falla siempre con un error de captcha que no tiene nada que
+   * ver con lo que el jugador escribió.
+   */
+  const resetCaptcha = () => {
+    setCaptcha("");
+    const id = widgetId.current;
+    if (!id) return;
+    try {
+      window.turnstile?.reset(id);
+    } catch (caught) {
+      console.error(caught);
+    }
+  };
 
   const rejectLocally = () => {
     setShake(true);
@@ -91,7 +197,9 @@ export function AuthForm() {
     const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password: pass,
+      options: { captchaToken: captcha || undefined },
     });
+    resetCaptcha();
     if (authError) {
       fail(translate(authError.message), authError);
       return;
@@ -125,8 +233,10 @@ export function AuthForm() {
       options: {
         data: { username },
         emailRedirectTo: `${window.location.origin}/auth/confirm`,
+        captchaToken: captcha || undefined,
       },
     });
+    resetCaptcha();
     if (authError) {
       fail(translate(authError.message), authError);
       return;
@@ -195,7 +305,10 @@ export function AuthForm() {
     const supabase = createClient();
     // Sin pasar por "sending": ese estado reetiqueta el botón de envío del
     // formulario ("VERIFICANDO…"), que no es lo que se está haciendo.
-    const { error: authError } = await supabase.auth.signInAnonymously();
+    const { error: authError } = await supabase.auth.signInAnonymously({
+      options: { captchaToken: captcha || undefined },
+    });
+    resetCaptcha();
     if (authError) {
       fail(translate(authError.message), authError);
       return;
@@ -214,6 +327,19 @@ export function AuthForm() {
 
   return (
     <div className="av-auth-wrap fade-in">
+      {/* Sin clave pública no se pide nada a Cloudflare: ni script, ni widget,
+          ni token. Es lo que deja el stack local y la suite sin tocar. */}
+      {TURNSTILE_SITE_KEY && (
+        <Script
+          id="cf-turnstile"
+          src={TURNSTILE_SRC}
+          strategy="lazyOnload"
+          // `onReady` y no `onLoad`: vuelve a disparar en cada montaje, así
+          // el widget se repinta al volver de una navegación de cliente.
+          onReady={() => setScriptReady(true)}
+          onError={(caught) => console.error(caught)}
+        />
+      )}
       <div className={"auth-card" + (shake ? " shake" : "")}>
         <div className="auth-header">
           <div className="mark" aria-hidden />
@@ -348,6 +474,12 @@ export function AuthForm() {
                   placeholder="••••••••"
                 />
               </div>
+
+              {/* Un solo widget da el token a los tres envíos de la tarjeta:
+                  entrar, crear cuenta y jugar como invitado. */}
+              {TURNSTILE_SITE_KEY && (
+                <div className="av-captcha" ref={captchaRef} />
+              )}
 
               <button
                 className="btn lg"
