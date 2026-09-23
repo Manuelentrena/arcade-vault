@@ -64,8 +64,9 @@ cp .env.example .env.local
 | `CONTACT_FROM_EMAIL`                   | Remitente. Por defecto el de pruebas, `onboarding@resend.dev`.             |
 | `NEXT_PUBLIC_SUPABASE_URL`             | URL del proyecto de Supabase (o `http://127.0.0.1:54321` en local).        |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Clave publicable (`sb_publishable_…`), **no** la `anon` heredada.          |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | Clave pública del captcha de `/auth`. **Ausente = captcha apagado.**       |
 
-**Las dos `NEXT_PUBLIC_*` son públicas**: Next las incrusta en el bundle del navegador. Lo que protege los datos es la RLS de `public.profiles`, no el secreto de esas claves. Aun así, `.env.example` lleva marcadores y no los valores reales, porque hay rastreos automáticos que buscan proyectos Supabase sin RLS para abusar de `/auth/v1/signup`. **Ninguna clave de servicio** (`service_role`, `sb_secret_…`) entra en el repo ni llega al cliente.
+**Las `NEXT_PUBLIC_*` son públicas**: Next las incrusta en el bundle del navegador. Lo que protege los datos es la RLS de `public.profiles`, no el secreto de esas claves. Aun así, `.env.example` lleva marcadores y no los valores reales, porque hay rastreos automáticos que buscan proyectos Supabase sin RLS para abusar de `/auth/v1/signup`. **Ninguna clave de servicio** (`service_role`, `sb_secret_…`) entra en el repo ni llega al cliente.
 
 **Modo simulado.** Sin `RESEND_API_KEY` el formulario sigue funcionando: el endpoint responde `{ ok: true, simulated: true }` y escribe el mensaje en la consola del servidor, sin mandar ningún correo. Es el camino que recorre un clon recién clonado y el que fuerza `npm test`, así que la suite nunca envía correo de verdad.
 
@@ -103,6 +104,27 @@ Los paneles son manuales; el repo no puede automatizarlos.
 En local lo enciende `enable_anonymous_sign_ins = true` en `supabase/config.toml`, y **hace falta `npx supabase stop && npx supabase start`**: `db reset` no recoge ese flag. En el proyecto remoto es otro interruptor manual, Authentication → Sign In / Providers → Anonymous. Si se olvida, el botón pinta `EL MODO INVITADO NO ESTÁ DISPONIBLE` en vez de romperse.
 
 Cada clic crea una fila en `auth.users`. El rate limit por IP (`anonymous_users` en `[auth.rate_limit]`) contiene el abuso, y de barrer los caducados se encarga la purga automática de abajo.
+
+### Captcha anti-bot en `/auth`
+
+`JUGAR COMO INVITADO` crea un usuario real con un solo clic y sin correo: es el endpoint más barato de abusar que tiene el proyecto, y los invitados que un bot cree este mes ya cuentan en la factura aunque la purga los borre a los treinta días. La defensa es un widget de [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) cuyo token viaja en `signInWithPassword`, `signUp` y `signInAnonymously`. `signInWithOAuth` queda fuera: es una redirección y Supabase no le aplica captcha.
+
+En el caso normal el jugador no ve nada — el widget va en modo `interaction-only` y sólo se pinta si Cloudflare necesita a un humano.
+
+**Todo cuelga de `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.** Sin esa variable no se carga el script, no se pinta el contenedor y el token viaja como `undefined`. Por eso el stack local, `npm test` y las capturas de referencia funcionan sin tocar nada, y por eso `supabase/config.toml` deja el bloque `[auth.captcha]` comentado: encenderlo en local obligaría a la suite a resolver un captcha real en cada prueba de `/auth`.
+
+Poner en marcha el captcha son cuatro pasos manuales, **en este orden**:
+
+1. **Cloudflare** → Turnstile → _Add site_. Añade el dominio de producción y, si quieres probarlo en local, `localhost`. Widget mode **Managed**. Salen dos claves.
+2. La **_site key_** (pública, `0x4AAAA…`) va al entorno de la aplicación como `NEXT_PUBLIC_TURNSTILE_SITE_KEY`: `.env.local` en local, variables del hosting en producción.
+3. Despliega con esa variable puesta y comprueba que `/auth` sigue funcionando: entrar, registrarse, invitado y los dos botones de OAuth.
+4. Sólo entonces, la **_secret key_** en **Supabase** → Authentication → Attack Protection → _Enable Captcha protection_, proveedor **Turnstile**.
+
+**El orden es la parte importante.** El flag de Supabase es por proyecto, no por endpoint: en cuanto se activa, los tres formularios exigen token. Si se enciende antes de desplegar la variable, `/auth` queda inservible en el hueco entre ambos pasos. En sentido contrario no pasa nada: con la variable puesta y el flag apagado, el widget se pinta y el token se ignora.
+
+La clave secreta **no entra en el repositorio ni en el entorno de la aplicación**: la guarda Supabase, que es quien la verifica contra Cloudflare. Y si Turnstile se cae, el flag se apaga desde el panel de Supabase en segundos, sin desplegar nada.
+
+Si el script no carga — un bloqueador de anuncios, la red — los tres botones siguen pulsables: el envío sale sin token, Supabase lo rechaza y el terminal rojo dice `VERIFICACIÓN ANTI-BOT FALLIDA, INTÉNTALO DE NUEVO`. Un bloqueador no deja la pantalla muerta y sin explicación.
 
 ### Purga automática de invitados
 
@@ -199,7 +221,7 @@ Vive en `supabase/templates/confirmation.html` y `supabase/config.toml` la enlaz
 | `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos.                                                             |
 | `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe.         |
 | `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: pantalla CRT animada, HUD con puntuación y vidas, pausa, `FIN` y modal de fin de partida. `notFound()` si el `id` no existe. |
-| `/auth`       | `app/auth/page.tsx`       | Entrar, crear cuenta o jugar como invitado contra Supabase Auth. Aterriza en `?next=` o, si no lo hay, en la biblioteca.                                                                     |
+| `/auth`       | `app/auth/page.tsx`       | Entrar, crear cuenta o jugar como invitado contra Supabase Auth. Aterriza en `?next=` o, si no lo hay, en la biblioteca.                  |
 | `/salon`      | `app/salon/page.tsx`      | Salón de la Fama: podio, tabla de puntuaciones y selector de juego.                                                                       |
 | `/acerca`     | `app/acerca/page.tsx`     | Acerca de: misión, destacados y formulario de contacto que envía por Resend.                                                              |
 | —             | `app/not-found.tsx`       | Pantalla 404 con el tema arcade.                                                                                                          |
@@ -322,8 +344,9 @@ npx skills@latest add Klerith/fernando-skills
 | [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md) | Implementado | SPEC 01, SPEC 02, SPEC 03          |
 | [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md)                  | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04 |
 | [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md)                          | Implementado | SPEC 01–05                         |
-| [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md) | Implementado | SPEC 06 |
-| [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md) | Implementado | SPEC 07 |
+| [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md)                     | Implementado | SPEC 06                            |
+| [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)              | Implementado | SPEC 07                            |
+| [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)               | Implementado | SPEC 07                            |
 
 ## Referencias
 
