@@ -30,5 +30,7 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // supabase/functions/ es Deno, no Next: importa por `jsr:` y usa el global
+  // `Deno`, que este tsconfig no conoce. Lo comprueba su propio runtime.
+  "exclude": ["node_modules", "supabase/functions"]
 }

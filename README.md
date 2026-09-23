@@ -7,7 +7,7 @@ Plataforma web para jugar a clásicos arcade y competir por la mayor puntuación
 El repo contiene una **maqueta navegable completa**: siete pantallas reales sobre Next.js App Router, con navegación, filtros, formulario de sesión y tablas de puntuaciones funcionando de extremo a extremo. Lo que todavía **no** existe:
 
 - **Los ocho juegos son decorativos.** No hay motor de juego. El reproductor (`/jugar/[id]`) anima una escena CRT y sube la puntuación sola con un temporizador; no se juega nada.
-- **Los datos del catálogo siguen siendo estáticos.** Los ocho juegos viven en `lib/games.ts`. Lo único que hay en base de datos es la autenticación: la tabla `public.profiles` y el esquema `auth` de Supabase.
+- **Los datos del catálogo siguen siendo estáticos.** Los ocho juegos viven en `lib/games.ts`. En base de datos sólo está lo que sostiene la sesión: `public.profiles`, el esquema `auth` de Supabase y la purga diaria de invitados.
 - **La sesión ya es real.** `/auth` habla con Supabase Auth: correo y contraseña con confirmación por correo, y OAuth de Google y GitHub si están dados de alta. La sesión vive en cookies, no en `localStorage`, y `/jugar/[id]` exige estar dentro.
 - **Las puntuaciones no se guardan.** Las genera un LCG determinista (`seededScores()` en `lib/scores.ts`) a partir del `id` del juego, así que son siempre las mismas y nadie las escribe.
 - **No hay página de cuenta de usuario ni internacionalización.** La interfaz es solo español y solo tema oscuro.
@@ -102,12 +102,76 @@ Los paneles son manuales; el repo no puede automatizarlos.
 
 En local lo enciende `enable_anonymous_sign_ins = true` en `supabase/config.toml`, y **hace falta `npx supabase stop && npx supabase start`**: `db reset` no recoge ese flag. En el proyecto remoto es otro interruptor manual, Authentication → Sign In / Providers → Anonymous. Si se olvida, el botón pinta `EL MODO INVITADO NO ESTÁ DISPONIBLE` en vez de romperse.
 
-Cada clic crea una fila en `auth.users`. El rate limit por IP (`anonymous_users` en `[auth.rate_limit]`) contiene el abuso; en producción conviene además barrer los caducados de vez en cuando, que se llevan su perfil por cascada:
+Cada clic crea una fila en `auth.users`. El rate limit por IP (`anonymous_users` en `[auth.rate_limit]`) contiene el abuso, y de barrer los caducados se encarga la purga automática de abajo.
+
+### Purga automática de invitados
+
+Un invitado que no vuelve deja su fila en `auth.users` y en `profiles` para siempre: Supabase no recoge nada por su cuenta. Una vez al día, **a las 04:00 UTC**, un job de `pg_cron` llamado `purga-invitados` borra a los invitados que llevan **más de 30 días** sin iniciar sesión, hasta **200 por pasada**. Sólo toca a los anónimos; una cuenta registrada nunca entra en la selección.
+
+El borrado no se hace en SQL. Un `delete from auth.users` salta las cascadas y el estado interno de GoTrue (identidades, sesiones, refresh tokens), así que la cadena es más larga:
+
+```
+pg_cron → public.purge_guests_tick() → pg_net (POST) → Edge Function borrar-invitados
+        → public.stale_guest_ids() → auth.admin.deleteUser() → profiles por cascada
+        → fila en public.guest_cleanup_runs
+```
+
+Postgres filtra y dispara; la Edge Function orquesta, porque el Admin API exige clave de servicio. `pg_net` dispara y no espera, de modo que el cron nunca ve el resultado: el rastro de cada pasada queda en `public.guest_cleanup_runs`. **Una pasada sin fila es una pasada que no llegó.** Esa tabla tiene RLS activada y ninguna política, así que no se lee con la clave publicable; tampoco son invocables por `anon` ni `authenticated` las dos funciones.
+
+#### Secretos
+
+`purge_guests_tick()` lee del Vault a dónde llamar y con qué credencial. **Sin esos dos secretos el job sale sin hacer nada** — es la guarda que deja la purga muda tras un `db reset`, para que `npm test` no dispare peticiones HTTP. Hay que crearlos **a mano, una vez por entorno**; un `db reset` en local se los lleva.
+
+El bearer no es la clave de servicio: es un secreto propio, `PURGE_SECRET`, generado al azar. Así la clave potente nunca sale de la Edge Function.
+
+```bash
+openssl rand -base64 32     # el mismo valor va en los dos sitios de abajo
+```
+
+En la base, para que el cron sepa a dónde mandarlo:
 
 ```sql
-delete from auth.users
-where is_anonymous is true and created_at < now() - interval '30 days';
+-- Local: la API vista desde el contenedor de Postgres, no 127.0.0.1.
+select vault.create_secret('http://supabase_kong_05-arcade_vault:8000/functions/v1/borrar-invitados', 'guest_purge_url');
+-- Remoto: https://<project-ref>.supabase.co/functions/v1/borrar-invitados
+select vault.create_secret('<PURGE_SECRET>', 'guest_purge_key');
 ```
+
+En la función, para que lo compare. En local va en `supabase/functions/.env` (ignorado por git); en remoto:
+
+```bash
+npx supabase secrets set PURGE_SECRET=<PURGE_SECRET> GUEST_RETENTION_DAYS=30
+```
+
+`GUEST_RETENTION_DAYS` es el plazo en días, 30 por defecto. Cambiarlo no exige migración. Antes de dar un despliegue por bueno, comprobar que `select count(*) from vault.decrypted_secrets` no da error de permisos: si el rol no pudiera leer la vista, la guarda no distinguiría «no hay secreto» de «no puedo leerlo» y la purga callaría para siempre.
+
+#### Ensayo y verificación manual
+
+`?dry_run=1` cuenta lo que se habría borrado sin borrar nada:
+
+```bash
+curl -i -X POST 'http://127.0.0.1:54321/functions/v1/borrar-invitados?dry_run=1' \
+  -H "Authorization: Bearer $PURGE_SECRET"
+# {"dry_run":true,"candidates":12,"deleted":12,"failed":0,"error":null}
+```
+
+Sin `Authorization` o con una clave que no cuadra responde `401` y no toca la base. El guion completo de extremo a extremo, con el stack arrancado y `npx supabase functions serve` en otra terminal:
+
+```sql
+-- 1. Envejecer a los invitados existentes (abre antes una sesión con JUGAR COMO INVITADO).
+update auth.users set last_sign_in_at = now() - interval '60 days' where is_anonymous;
+select * from public.stale_guest_ids(30, 200);   -- deben aparecer
+
+-- 2. Disparar la purga como lo haría el cron.
+select public.purge_guests_tick();
+
+-- 3. Comprobar. pg_net es asíncrono: la respuesta tarda un instante en aparecer.
+select status_code, content from net._http_response order by id desc limit 1;
+select count(*) from auth.users where is_anonymous;        -- 0
+select * from public.guest_cleanup_runs order by id desc;  -- una fila por pasada
+```
+
+Para ver el job: `select jobname, schedule, active from cron.job;`.
 
 ### Plantilla del correo de confirmación
 
@@ -190,7 +254,9 @@ lib/
 
 supabase/                 # stack local y esquema
   config.toml             # configuración del stack de Docker
-  migrations/             # tabla profiles, trigger de alta y políticas RLS
+  migrations/             # profiles, trigger de alta, RLS y la purga de invitados
+  functions/
+    borrar-invitados/     # Edge Function que borra invitados por el Admin API
   seed.sql                # usuario de pruebas PX_KAI, confirmado
   templates/              # plantilla del correo de confirmación
 
@@ -257,6 +323,7 @@ npx skills@latest add Klerith/fernando-skills
 | [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md)                  | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04 |
 | [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md)                          | Implementado | SPEC 01–05                         |
 | [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md) | Implementado | SPEC 06 |
+| [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md) | Implementado | SPEC 07 |
 
 ## Referencias
 

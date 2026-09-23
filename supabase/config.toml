@@ -412,6 +412,12 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+[functions.borrar-invitados]
+# PURGE_SECRET es una cadena aleatoria, no un JWT: con verify_jwt la plataforma
+# la rechazaría antes de que la función la viera. La autorización la hace la
+# propia función, comparando el bearer contra PURGE_SECRET.
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
