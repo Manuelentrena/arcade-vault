@@ -10,7 +10,7 @@ Arcade Vault — an arcade gaming platform where players compete for high scores
 
 Most of what sits below the UI is still simulated: the eight games are decorative (no game engine — the player animates a CRT scene and increments the score on a timer), and leaderboard rows are produced by a deterministic LCG in `lib/scores.ts` and never persisted. Treat those as deliberate boundaries; a spec decides when one of them changes.
 
-**Authentication is the exception — it is real.** SPEC 06 replaced the fake session with Supabase Auth: email/password with mandatory email confirmation, Google and GitHub OAuth, a `public.profiles` table under RLS, and cookies refreshed by `proxy.ts`. The session lives in cookies, never in `localStorage`; `lib/session.ts` and the `av_user` key are gone. `/jugar/[id]` is the only protected route. SPEC 07 added guest access on top: `JUGAR COMO INVITADO` calls `signInAnonymously()`, so a guest is a real user with `is_anonymous: true` — same cookie, same proxy, same `profiles` row. The trigger gives them a technical username (`INV70A7E1D`) that is never shown.
+**Authentication is the exception — it is real.** SPEC 06 replaced the fake session with Supabase Auth: email/password with mandatory email confirmation, Google and GitHub OAuth, a `public.profiles` table under RLS, and cookies refreshed by `proxy.ts`. The session lives in cookies, never in `localStorage`; `lib/session.ts` and the `av_user` key are gone. `/jugar/[id]` is the only protected route. SPEC 07 added guest access on top: `JUGAR COMO INVITADO` calls `signInAnonymously()`, so a guest is a real user with `is_anonymous: true` — same cookie, same proxy, same `profiles` row. The trigger gives them a technical username (`INV70A7E1D`) that is never shown. SPEC 08 added the collection: a daily `pg_cron` job deletes guests inactive for more than 30 days.
 
 The project follows **spec-driven development**. Write a spec before implementing a feature — see the spec workflow section below.
 
@@ -33,6 +33,7 @@ npx supabase start   # local stack in Docker (Postgres, Auth, Studio, Mailpit)
 npx supabase stop    # tear it down
 npx supabase db reset # replay migrations + seed.sql
 npx supabase status  # API URL, publishable key, Mailpit URL
+npx supabase functions serve --env-file supabase/functions/.env   # Edge Functions en local
 ```
 
 `npm test` requires the local Supabase stack to be running: its `pretest` runs `npx supabase db reset` and then waits for Auth to answer. Without Docker up it fails there.
@@ -74,6 +75,15 @@ Plus `lib/supabase/`, which is not mock data:
 **Session rule:** components read session state through `useSession()` from `components/session-provider.tsx`; server code uses `getServerSession()`. `app/layout.tsx` resolves the session once and hands it to the provider as `initialUser`, so the first HTML already carries the name — which is also why all seven routes are dynamic. Never talk to Supabase auth directly from a component that only needs to know who is signed in, and never reintroduce a second source of truth in `localStorage`. The name you paint comes from `displayName(user)` in `lib/supabase/user.ts`, never from `user.name` directly — that is what keeps a guest's technical username off the screen.
 
 **Schema changes** go in a migration under `supabase/migrations/`, never as an ad-hoc statement against the database: `npx supabase db reset` replays them locally and is what `pretest` runs.
+
+**Guest purge (SPEC 08).** A daily `pg_cron` job, `purga-invitados` at `0 4 * * *` (UTC — `cron.timezone` is GMT), deletes anonymous users inactive for more than 30 days. The chain is `purge_guests_tick()` → `pg_net` POST → Edge Function `supabase/functions/borrar-invitados` → `stale_guest_ids()` → `auth.admin.deleteUser()`. Four rules hold it together:
+
+- **Never delete from `auth.users` in SQL.** It skips the cascades and GoTrue's internal state (identities, sessions, refresh tokens). Deletion goes through the Admin API, which is why an Edge Function exists at all.
+- **Postgres filters, the function orchestrates.** The `is_anonymous` + age filter lives in `stale_guest_ids()`; do not move it to TypeScript, and do not send uuids in the POST body.
+- **Both functions are `security definer` in `public`, so PostgREST publishes them.** Each one carries a `revoke execute … from public, anon, authenticated`. Any new function in that family needs the same revoke, or the publishable key — which ships in the browser bundle — can fire it.
+- **The Vault secrets guard is load-bearing.** `purge_guests_tick()` returns early when `guest_purge_url` or `guest_purge_key` is missing. `db reset` wipes the Vault, so the job stays mute during `npm test` and fires no HTTP. Do not replace that guard with a default URL.
+
+`public.guest_cleanup_runs` is the only record of a run — `pg_net` is fire-and-forget and `cron.job_run_details` only knows the SQL returned. RLS on, no policies: the service key writes it, nobody reads it over the API. The secrets are created by hand per environment (`README.md`, «Purga automática de invitados»); `PURGE_SECRET` is a random bearer, never a service key, and never enters a versioned file.
 
 ## Stack and conventions
 

@@ -6,3 +6,6 @@
 .env.keys
 .env.local
 .env.*.local
+
+# Borradores del SQL Editor de Studio
+snippets

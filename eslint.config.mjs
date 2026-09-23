@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Design reference material, not part of the app build:
     "references/**",
+    // Deno, not Next: `jsr:` imports and the `Deno` global.
+    "supabase/functions/**",
   ]),
 ]);
 
