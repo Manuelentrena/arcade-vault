@@ -8,7 +8,10 @@
 // `pg_net` dispara y no espera, así que nadie lee esta respuesta. El rastro de
 // la pasada queda en `public.guest_cleanup_runs`.
 
-import { createClient } from "jsr:@supabase/supabase-js@2";
+// Versión fijada, no `@2`. Un major flotante hace que un redespliegue dentro de
+// meses traiga otra librería sin avisar, y una versión recién publicada puede
+// romper el bundler del CLI si sus dependencias npm aún no han propagado.
+import { createClient } from "jsr:@supabase/supabase-js@2.116.0";
 
 // Tope por pasada. Un histórico grande agotaría el tiempo de la función; el
 // resto se drena en pasadas sucesivas.
