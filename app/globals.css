@@ -1586,6 +1586,17 @@
   padding: 12px;
   font-size: 9px;
 }
+/* Hueco del widget de Turnstile, sobre el botón de envío. En el caso normal
+   Cloudflare resuelve solo y no pinta nada; la altura mínima está reservada de
+   antemano para que la tarjeta no dé un salto el día que sí aparece el reto.
+   El div sólo se monta si hay clave pública, así que este hueco no existe en
+   desarrollo ni en la suite. */
+.av-captcha {
+  display: flex;
+  justify-content: center;
+  min-height: 65px;
+  margin-top: 16px;
+}
 
 /* ===== salón ===== */
 .av-hall {
