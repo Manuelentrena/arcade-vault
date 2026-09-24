@@ -327,17 +327,17 @@ La aplicación vive en **Vercel**, y hay **un solo entorno remoto: producción**
 
 ### Mapa de entornos
 
-|                      | Local                              | Producción                        |
-| -------------------- | ---------------------------------- | --------------------------------- |
-| URL de la aplicación | `http://localhost:3000`            | `https://arcade-vault.vercel.app` |
-| Rama                 | la que sea                         | `main`, y solo `main`             |
-| Supabase             | stack de Docker (`supabase start`) | el proyecto remoto                |
-| Captcha              | apagado                            | activo                            |
-| Resend               | modo simulado                      | clave real                        |
-| Purga de invitados   | manual, tras crear los secretos    | activa, `0 4 * * *` UTC           |
-| Quién lo mira        | tú, con `npm run dev` y `npm test` | cualquiera                        |
+|                      | Local                              | Producción                            |
+| -------------------- | ---------------------------------- | ------------------------------------- |
+| URL de la aplicación | `http://localhost:3000`            | `https://arcade-vault-chi.vercel.app` |
+| Rama                 | la que sea                         | `main`, y solo `main`                 |
+| Supabase             | stack de Docker (`supabase start`) | el proyecto remoto                    |
+| Captcha              | apagado                            | activo                                |
+| Resend               | modo simulado                      | clave real                            |
+| Purga de invitados   | manual, tras crear los secretos    | activa, `0 4 * * *` UTC               |
+| Quién lo mira        | tú, con `npm run dev` y `npm test` | cualquiera                            |
 
-El nombre del proyecto en Vercel decide el dominio: `arcade-vault` da `arcade-vault.vercel.app` si está libre, y si no Vercel le añade un sufijo. **El dominio que salga es el valor que va a las _Redirect URLs_ de Supabase y a los hostnames de Turnstile**, así que anótalo antes de seguir.
+El nombre del proyecto en Vercel decide el dominio: `arcade-vault` daría `arcade-vault.vercel.app` si estuviera libre, pero **no lo estaba** — ese dominio es de otra aplicación ajena a este proyecto —, así que Vercel sufijó y el dominio real es `arcade-vault-chi.vercel.app`. **El dominio que salga es el valor que va a las _Redirect URLs_ de Supabase y a los hostnames de Turnstile**, así que compruébalo en el panel de Vercel antes de seguir en vez de darlo por hecho a partir del nombre del proyecto.
 
 ### Alta del proyecto en Vercel
 
@@ -383,11 +383,11 @@ Tres reglas que no conviene saltarse:
 
 El proyecto remoto ya quedó configurado en las SPEC 06 a 09. Lo único que cambia al publicar es el dominio desde el que se le habla:
 
-- **Supabase → Authentication → URL Configuration.** _Site URL_ `https://arcade-vault.vercel.app`, y en _Redirect URLs_ `https://arcade-vault.vercel.app/**`. Sin esto, `/auth/callback` canjea el código y redirige a `localhost`: el jugador acaba en una pantalla sin sesión.
+- **Supabase → Authentication → URL Configuration.** _Site URL_ `https://arcade-vault-chi.vercel.app`, y en _Redirect URLs_ `https://arcade-vault-chi.vercel.app/**`. Sin esto, `/auth/callback` canjea el código y redirige a `localhost`: el jugador acaba en una pantalla sin sesión.
 - **Sin comodines de dominio.** Un comodín sobre `*.vercel.app` convertiría `/auth/callback` en un redirector abierto hacia cualquier despliegue de cualquier cuenta. El comodín de ruta (`/**`) sobre el hostname exacto sí es lo correcto.
 - **El origen de `localhost` puede quedarse** en la lista: es lo que permite seguir probando OAuth en local contra el proyecto remoto.
 - **Google y GitHub no se tocan.** Su _callback_ apunta a `https://<ref>.supabase.co/auth/v1/callback`, que no depende del dominio de la aplicación.
-- **Cloudflare → Turnstile.** Añadir `arcade-vault.vercel.app` a los hostnames del widget. Vale el hostname exacto; un comodín sobre `vercel.app` no, porque es un sufijo público.
+- **Cloudflare → Turnstile.** Añadir `arcade-vault-chi.vercel.app` a los hostnames del widget. Vale el hostname exacto; un comodín sobre `vercel.app` no, porque es un sufijo público. Cuidado con registrar `arcade-vault.vercel.app` por descuido: es de otra aplicación, y el widget no validaría nada en el dominio real.
 - **La purga de invitados no se toca.** Ya está viva en este proyecto, con sus secretos en el Vault.
 
 ### Circuito de despliegue por spec
