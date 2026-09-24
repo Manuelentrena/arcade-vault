@@ -8,7 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Arcade Vault — an arcade gaming platform where players compete for high scores. The five screens are ported from the HTML/JSX mockup in `references/templates/` and are fully navigable: library with search and category filters, game detail with a leaderboard, a CRT player, a sign-in form, and a hall of fame.
 
-Most of what sits below the UI is still simulated: the eight games are decorative (no game engine — the player animates a CRT scene and increments the score on a timer), and leaderboard rows are produced by a deterministic LCG in `lib/scores.ts` and never persisted. Treat those as deliberate boundaries; a spec decides when one of them changes.
+Most of what sits below the UI is still simulated: six of the seven games are decorative (no game engine — the player animates a CRT scene and increments the score on a timer), and leaderboard rows are produced by a deterministic LCG in `lib/scores.ts` and never persisted. Treat those as deliberate boundaries; a spec decides when one of them changes.
+
+**`TETRIX` is the exception — it is a real game.** SPEC 13 replaced `BLOQUE BUSTER` and `CAÍDA` with a single playable entry and ported the Tetris in `references/started-games/03-tetris/` to React. The rules live in `lib/tetris.ts`, a pure module with no `document`, `window` or canvas: 10 × 20 board, the seven standard tetrominoes, wall kicks `[0, ±1, ±2]`, ghost piece, `NEXT` preview, soft and hard drop, `min(10, floor(lines / 10) + 1)` for the level and `max(100, 1000 − (level − 1) × 90)` ms for the fall — so the level caps at 10 and the interval at 190 ms. One life: the top-out ends the run. The canvas, the `requestAnimationFrame` loop, the keyboard and the on-screen pad live in `components/tetris-game.tsx`, and `components/game-player.tsx` mounts it only when `game.id === "tetrix"`.
+
+Two rules hold that boundary. **The HUD is common to all seven games** — player, score, hearts, level, and the `PAUSA` / `FIN` / `SALIR` buttons — so nothing game-specific goes into it and no pause control goes inside the screen; `TETRIX` only reports its numbers through `onRun`. And **the score is still not persisted**: the engine computes a real one, but `GUARDAR PUNTUACIÓN` in the modal stays decorative. The modal shows the session's name — no editable input — and a guest gets an invitation to sign in instead of the save button: it sends the run to `/auth` and back through the URL (`/jugar/tetrix?puntuacion=&nivel=`), which `app/jugar/[id]/page.tsx` validates and hands to the player as `restored`. Nothing is written anywhere; real persistence needs a table, RLS and a migration, so it is a spec of its own.
 
 **Authentication is the exception — it is real.** SPEC 06 replaced the fake session with Supabase Auth: email/password with mandatory email confirmation, Google and GitHub OAuth, a `public.profiles` table under RLS, and cookies refreshed by `proxy.ts`. The session lives in cookies, never in `localStorage`; `lib/session.ts` and the `av_user` key are gone. `/jugar/[id]` is the only protected route. SPEC 07 added guest access on top: `JUGAR COMO INVITADO` calls `signInAnonymously()`, so a guest is a real user with `is_anonymous: true` — same cookie, same proxy, same `profiles` row. The trigger gives them a technical username (`INV70A7E1D`) that is never shown. SPEC 08 added the collection: a daily `pg_cron` job deletes guests inactive for more than 30 days.
 
@@ -58,12 +62,12 @@ Routes (App Router, URLs deliberately in Spanish):
 
 The route files under `app/` stay thin: they resolve params, fetch from `lib/`, and delegate to a component. Put behavior in `components/`, not in the page.
 
-Nine components in `components/`. Seven are client components (`"use client"`) because they hold state or DOM handlers — `nav.tsx`, `session-provider.tsx`, `library-browser.tsx`, `game-card.tsx`, `game-player.tsx`, `auth-form.tsx`, `hall-of-fame.tsx`. Two are server components and should stay that way: `footer.tsx` and `leaderboard.tsx`, which renders rows it receives as props.
+Ten components in `components/`. Eight are client components (`"use client"`) because they hold state or DOM handlers — `nav.tsx`, `session-provider.tsx`, `library-browser.tsx`, `game-card.tsx`, `game-player.tsx`, `tetris-game.tsx`, `auth-form.tsx`, `hall-of-fame.tsx`. Two are server components and should stay that way: `footer.tsx` and `leaderboard.tsx`, which renders rows it receives as props.
 
-Two mock-data modules in `lib/`:
+Two mock-data modules in `lib/` — plus `tetris.ts`, which is not mock data but the rules of `TETRIX` (see above):
 
-- `games.ts` — `Game`, `GameColor`, `GameCat`, `CatFilter`, the `GAMES` array, `CATS`, and `getGame(id)`.
-- `scores.ts` — `ScoreRow`, `PLAYERS`, `seededScores(seed, count)`, plus `detailSeed(gameId)` and `hallSeed(gameId)`. The seeds are inherited from the mockup; changing them rewrites every leaderboard in the app and every reference screenshot.
+- `games.ts` — `Game`, `GameColor`, `GameCat`, `CatFilter`, the `GAMES` array, `CATS`, and `getGame(id)`. A game may carry an optional `image` (a real screenshot under `public/juegos/`) that replaces the CSS-drawn cover; only `TETRIX` has one, because only `TETRIX` exists to be photographed.
+- `scores.ts` — `ScoreRow`, `PLAYERS`, `seededScores(seed, count)`, plus `detailSeed(gameId)` and `hallSeed(gameId)`. The seeds are inherited from the mockup; changing them rewrites every leaderboard in the app and every reference screenshot. Both derive from `gameId.length`, so renaming a game's id rewrites its tables.
 
 Plus `lib/supabase/`, which is not mock data:
 

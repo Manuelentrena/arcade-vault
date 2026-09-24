@@ -6,8 +6,9 @@ Plataforma web para jugar a clásicos arcade y competir por la mayor puntuación
 
 El repo contiene una **maqueta navegable completa**: siete pantallas reales sobre Next.js App Router, con navegación, filtros, formulario de sesión y tablas de puntuaciones funcionando de extremo a extremo. Lo que todavía **no** existe:
 
-- **Los ocho juegos son decorativos.** No hay motor de juego. El reproductor (`/jugar/[id]`) anima una escena CRT y sube la puntuación sola con un temporizador; no se juega nada.
-- **Los datos del catálogo siguen siendo estáticos.** Los ocho juegos viven en `lib/games.ts`. En base de datos sólo está lo que sostiene la sesión: `public.profiles`, el esquema `auth` de Supabase y la purga diaria de invitados.
+- **Seis de los siete juegos son decorativos.** La excepción es `TETRIX`: tiene motor real (SPEC 13) — tablero de 10 × 20 dentro de la pantalla CRT, siete tetrominós, rotación con _wall kicks_, pieza fantasma, vista de la siguiente, soft y hard drop, una vida y diez niveles. En los otros seis el reproductor (`/jugar/[id]`) sigue animando una escena CRT y subiendo la puntuación sola con un temporizador; no se juega nada.
+- **Las puntuaciones de `TETRIX` tampoco se guardan.** El motor calcula una puntuación real durante la partida, pero `GUARDAR PUNTUACIÓN` del modal sigue siendo decorativo: no hay tabla ni petición. A un invitado el modal le pide entrar con Google, GitHub o correo antes de guardar, y al volver de `/auth` recupera su puntuación — que viaja en la URL (`?puntuacion=&nivel=`) y tampoco se escribe en ningún sitio.
+- **Los datos del catálogo siguen siendo estáticos.** Los siete juegos viven en `lib/games.ts`. En base de datos sólo está lo que sostiene la sesión: `public.profiles`, el esquema `auth` de Supabase y la purga diaria de invitados.
 - **La sesión ya es real.** `/auth` habla con Supabase Auth: correo y contraseña con confirmación por correo, y OAuth de Google y GitHub si están dados de alta. La sesión vive en cookies, no en `localStorage`, y `/jugar/[id]` exige estar dentro.
 - **Las puntuaciones no se guardan.** Las genera un LCG determinista (`seededScores()` en `lib/scores.ts`) a partir del `id` del juego, así que son siempre las mismas y nadie las escribe.
 - **No hay página de cuenta de usuario ni internacionalización.** La interfaz es solo español y solo tema oscuro.
@@ -220,9 +221,9 @@ Vive en `supabase/templates/confirmation.html` y `supabase/config.toml` la enlaz
 | Ruta          | Fichero                   | Qué muestra                                                                                                                               |
 | ------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `/`           | `app/page.tsx`            | Portada: hero, por qué Arcade Vault, avance de seis juegos, cifras, actividad en vivo, precios y llamada final.                           |
-| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos.                                                             |
+| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los siete juegos.                                                             |
 | `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe.         |
-| `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: pantalla CRT animada, HUD con puntuación y vidas, pausa, `FIN` y modal de fin de partida. `notFound()` si el `id` no existe. |
+| `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: HUD con puntuación, vidas y nivel, pausa, `FIN` y modal de fin. `TETRIX` monta dentro el motor real; el resto, una escena CRT animada. `notFound()` si el `id` no existe. |
 | `/auth`       | `app/auth/page.tsx`       | Entrar, crear cuenta o jugar como invitado contra Supabase Auth. Aterriza en `?next=` o, si no lo hay, en la biblioteca.                  |
 | `/salon`      | `app/salon/page.tsx`      | Salón de la Fama: podio, tabla de puntuaciones y selector de juego.                                                                       |
 | `/acerca`     | `app/acerca/page.tsx`     | Acerca de: misión, destacados y formulario de contacto que envía por Resend.                                                              |
@@ -260,6 +261,7 @@ components/               # componentes de interfaz
   game-card.tsx           # tarjeta con efecto tilt
   leaderboard.tsx         # tabla de puntuaciones del detalle (componente de servidor)
   game-player.tsx         # reproductor CRT, HUD y modal de fin de partida
+  tetris-game.tsx         # canvas, bucle y mandos de TETRIX dentro del CRT
   auth-form.tsx           # entrar, crear cuenta, OAuth y terminales de estado
   hall-of-fame.tsx        # podio y tabla del salón
   use-reveal.ts           # aparición de las secciones .reveal al hacer scroll
@@ -268,7 +270,8 @@ components/               # componentes de interfaz
   about/                  # mitades de /acerca y el formulario de contacto
 
 lib/
-  games.ts                # los ocho juegos, categorías y getGame() (simulado)
+  games.ts                # los siete juegos, categorías y getGame() (simulado)
+  tetris.ts               # motor de TETRIX: puro, sin DOM ni canvas (SPEC 13)
   scores.ts               # generador determinista de puntuaciones (simulado)
   supabase/
     client.ts             # cliente de navegador
@@ -465,6 +468,7 @@ npx skills@latest add Klerith/fernando-skills
 | [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)  | Implementado | SPEC 09                            |
 | [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                  | Aprobado     | SPEC 09                            |
 | [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)              | Aprobado     | SPEC 11                            |
+| [13 — TETRIX: primer juego con motor real](specs/13-tetrix-motor-jugable.md)                    | Implementado | SPEC 01, SPEC 04                   |
 
 ## Referencias
 
