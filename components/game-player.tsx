@@ -1,38 +1,72 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/session-provider";
+import { TetrisGame, type TetrisRun } from "@/components/tetris-game";
 import type { Game } from "@/lib/games";
+import { LIVES as TETRIX_LIVES } from "@/lib/tetris";
 import { displayName } from "@/lib/supabase/user";
 
-/** Mismo invariante que profiles.username: mayúsculas y máximo 10 caracteres. */
-function normalizeName(name: string): string {
-  return name.trim().toUpperCase().slice(0, 10);
-}
+/**
+ * Partida recuperada al volver de /auth. Viaja en la URL (`?puntuacion=`) y la
+ * resuelve el servidor, así que no hace falta ni sessionStorage ni un efecto
+ * que la rescate después de hidratar. Nada de esto se persiste.
+ */
+export type RestoredRun = { score: number; level: number };
 
 const LIVES = 3;
 const TICK_MS = 220;
 
+/** El único juego con motor real: el resto sigue con la escena decorativa. */
+const PLAYABLE_ID = "tetrix";
+
 type Run = { score: number; lives: number; level: number };
 
 const NEW_RUN: Run = { score: 0, lives: LIVES, level: 1 };
+const NEW_TETRIX_RUN: Run = { score: 0, lives: TETRIX_LIVES, level: 1 };
 
-export function GamePlayer({ game }: { game: Game }) {
+export function GamePlayer({
+  game,
+  restored,
+}: {
+  game: Game;
+  restored?: RestoredRun;
+}) {
   const { user } = useSession();
-  const [run, setRun] = useState<Run>(NEW_RUN);
-  const [paused, setPaused] = useState(false);
-  const [over, setOver] = useState(false);
-  const [saved, setSaved] = useState(false);
-  // null = todavía no editado: se muestra el nombre de la sesión.
-  const [editedName, setEditedName] = useState<string | null>(null);
+  const playable = game.id === PLAYABLE_ID;
+  const initialRun = playable ? NEW_TETRIX_RUN : NEW_RUN;
 
   // /jugar/[id] está detrás del proxy, así que aquí siempre hay sesión: la
   // rama sin usuario sólo existe porque useSession() la admite en el tipo.
-  const name = editedName ?? (user ? displayName(user) : "INVITADO");
+  // El nombre no se edita: es el de la sesión y nada más.
+  const name = user ? displayName(user) : "INVITADO";
+  const isGuest = user?.isGuest ?? true;
+  // Partida que vuelve de /auth con una sesión de verdad detrás.
+  const recuperada = restored !== undefined && !isGuest;
+
+  const [run, setRun] = useState<Run>(
+    recuperada ? { ...initialRun, ...restored, lives: 0 } : initialRun,
+  );
+  const [paused, setPaused] = useState(false);
+  // Volver de /auth con una partida recuperada reabre su modal de fin.
+  const [over, setOver] = useState(recuperada);
+  // Y la da por guardada: es justo lo que el jugador fue a hacer a /auth.
+  const [saved, setSaved] = useState(recuperada);
+  // Cambiar la key remonta el motor: es todo el reinicio que hace falta.
+  const [runKey, setRunKey] = useState(0);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  /** Lleva la partida a /auth, que devuelve a este mismo juego con ella. */
+  const goSignIn = () => {
+    const vuelta = `${pathname}?puntuacion=${run.score}&nivel=${run.level}`;
+    router.push(`/auth?next=${encodeURIComponent(vuelta)}`);
+  };
 
   useEffect(() => {
-    if (over || paused) return;
+    if (playable || over || paused) return;
     const timer = setInterval(() => {
       setRun((prev) => {
         const score = prev.score + Math.floor(10 + Math.random() * 90);
@@ -43,13 +77,29 @@ export function GamePlayer({ game }: { game: Game }) {
       });
     }, TICK_MS);
     return () => clearInterval(timer);
-  }, [over, paused]);
+  }, [playable, over, paused]);
+
+  // Con una partida recuperada el motor se monta de cero detrás del modal y su
+  // primer aviso (0 puntos) pisaría la puntuación que se acaba de recuperar.
+  // Se le ignora hasta que el jugador arranca una partida nueva.
+  const ignoreRun = useRef(recuperada);
+
+  const togglePause = useCallback(() => setPaused((p) => !p), []);
+  const handleRun = useCallback((next: TetrisRun) => {
+    if (ignoreRun.current) return;
+    setRun(next);
+  }, []);
+  const handleOver = useCallback(() => setOver(true), []);
 
   const restart = () => {
-    setRun(NEW_RUN);
+    ignoreRun.current = false;
+    setRun(initialRun);
     setPaused(false);
     setOver(false);
     setSaved(false);
+    setRunKey((k) => k + 1);
+    // Sin esto, recargar volvería a abrir el modal con la partida de la URL.
+    if (restored) router.replace(pathname, { scroll: false });
   };
 
   return (
@@ -76,7 +126,7 @@ export function GamePlayer({ game }: { game: Game }) {
           </div>
         </div>
         <div className="hud-actions">
-          <button className="btn yellow" onClick={() => setPaused((p) => !p)}>
+          <button className="btn yellow" onClick={togglePause}>
             {paused ? "REANUDAR" : "PAUSA"}
           </button>
           <button className="btn magenta" onClick={() => setOver(true)}>
@@ -89,14 +139,25 @@ export function GamePlayer({ game }: { game: Game }) {
       </div>
 
       <div className="crt">
-        <div className="crt-screen">
-          <div className="game-arena" aria-hidden>
-            <div className="grid-floor" />
-            <div className="enemy e1" />
-            <div className="enemy e2" />
-            <div className="enemy e3" />
-            <div className="player-ship" />
-          </div>
+        <div className={"crt-screen" + (playable ? " tetris" : "")}>
+          {playable ? (
+            <TetrisGame
+              key={runKey}
+              /* FIN también congela el motor: el bucle no sigue tras el modal. */
+              paused={paused || over}
+              onTogglePause={togglePause}
+              onRun={handleRun}
+              onOver={handleOver}
+            />
+          ) : (
+            <div className="game-arena" aria-hidden>
+              <div className="grid-floor" />
+              <div className="enemy e1" />
+              <div className="enemy e2" />
+              <div className="enemy e3" />
+              <div className="player-ship" />
+            </div>
+          )}
           {paused && (
             <div
               className="crt-content"
@@ -139,21 +200,29 @@ export function GamePlayer({ game }: { game: Game }) {
             <h2 id="av-game-over">FIN DEL JUEGO</h2>
             <div className="final-label">PUNTUACIÓN FINAL</div>
             <div className="final">{run.score.toLocaleString("es-ES")}</div>
-            {!saved ? (
+            <div className="modal-player">
+              <span className="l">Jugador</span>
+              <span className="v">{name}</span>
+            </div>
+            {saved ? (
+              <div className="toast-saved">▸ PUNTUACIÓN GUARDADA_</div>
+            ) : isGuest ? (
+              <div className="guest-save">
+                <p>
+                  Estás jugando como invitado. Inicia sesión con Google, GitHub
+                  o tu correo para guardar esta puntuación.
+                </p>
+                <button className="btn yellow" onClick={goSignIn}>
+                  INICIAR SESIÓN PARA GUARDAR
+                </button>
+              </div>
+            ) : (
+              /* Decorativo: no se persiste ninguna puntuación. */
               <div className="input-row">
-                <input
-                  value={name}
-                  onChange={(e) => setEditedName(normalizeName(e.target.value))}
-                  placeholder="TUS INICIALES"
-                  aria-label="Tus iniciales"
-                />
-                {/* Decorativo: no se persiste ninguna puntuación. */}
                 <button className="btn yellow" onClick={() => setSaved(true)}>
                   GUARDAR PUNTUACIÓN
                 </button>
               </div>
-            ) : (
-              <div className="toast-saved">▸ PUNTUACIÓN GUARDADA_</div>
             )}
             <div className="actions">
               <button className="btn" onClick={restart}>

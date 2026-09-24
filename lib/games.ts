@@ -12,6 +12,11 @@ export type Game = {
   cat: GameCat;
   /** Clase CSS de la portada generada por CSS: "cover-bricks". */
   cover: string;
+  /**
+   * Portada en imagen, si el juego tiene una captura real bajo `public/`.
+   * Cuando existe, sustituye a la portada generada por CSS.
+   */
+  image?: string;
   /** Variante de color del botón JUGAR. */
   color: GameColor;
   best: number;
@@ -20,23 +25,13 @@ export type Game = {
 
 export const GAMES: Game[] = [
   {
-    id: "bloque-buster",
-    title: "BLOQUE BUSTER",
-    short: "Rebota la pelota y destruye muros de neón.",
-    long: "Pilota una nave-paleta y rebota un núcleo de plasma para pulverizar muros de bloques cromáticos. Cada nivel reorganiza la grilla en patrones imposibles. ¿Hasta dónde llegará tu racha?",
-    cat: "ARCADE",
-    cover: "cover-bricks",
-    color: "cyan",
-    best: 28450,
-    plays: "12.4K",
-  },
-  {
-    id: "caida",
-    title: "CAÍDA",
-    short: "Encaja las piezas antes de que el techo te aplaste.",
-    long: "Piezas geométricas descienden desde la oscuridad. Rótalas, encástralas y limpia líneas para sobrevivir. La velocidad aumenta sin piedad cada 10 líneas.",
+    id: "tetrix",
+    title: "TETRIX",
+    short: "Encaja los tetrominós y limpia líneas sin llegar al techo.",
+    long: "Siete piezas de neón caen sobre una rejilla de 10 × 20. Rótalas, deslízalas y encájalas para limpiar líneas: cada diez líneas sube el nivel y las piezas caen más rápido, hasta el nivel 10. Una sola vida: si el montón llega al techo, la partida termina y empiezas de nuevo.",
     cat: "PUZZLE",
     cover: "cover-tetro",
+    image: "/juegos/tetrix.png",
     color: "magenta",
     best: 184220,
     plays: "31.8K",

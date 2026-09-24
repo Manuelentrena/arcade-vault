@@ -22,6 +22,27 @@ function freshIp(): string {
 /** Las fuentes de next/font cambian el layout al cargar: esperarlas evita capturas inestables. */
 async function ready(page: Page) {
   await page.evaluate(() => document.fonts.ready);
+  // Las portadas en imagen van con loading="lazy" y el carril del home está
+  // bajo el pliegue: sin forzarlas, sólo empiezan a cargar cuando la captura
+  // fullPage desplaza la página, y la referencia sale unas veces con foto y
+  // otras con el hueco vacío.
+  await page.evaluate(() =>
+    Promise.all(
+      [...document.images].map((img) => {
+        img.loading = "eager";
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }),
+    ),
+  );
+  await page.evaluate(() =>
+    Promise.all(
+      [...document.images].map((img) => img.decode().catch(() => {})),
+    ),
+  );
 }
 
 /**
@@ -262,10 +283,10 @@ test.describe("home", () => {
     await page.goto("/");
     await hydrated(page);
     const first = page.locator(".mini-card").first();
-    await expect(first).toHaveAttribute("href", "/juego/bloque-buster");
+    await expect(first).toHaveAttribute("href", "/juego/tetrix");
     await settled(page.locator(".home-section", { has: first }));
     await first.click();
-    await expect(page).toHaveURL("/juego/bloque-buster", {
+    await expect(page).toHaveURL("/juego/tetrix", {
       timeout: NAV_TIMEOUT,
     });
   });
@@ -319,10 +340,10 @@ test.describe("home sin animación de entrada", () => {
 });
 
 test.describe("biblioteca", () => {
-  test("muestra los 8 juegos", async ({ page }) => {
+  test("muestra los 7 juegos", async ({ page }) => {
     await page.goto("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(8);
-    await expect(page.locator(".cover-bg")).toHaveCount(8);
+    await expect(page.locator(".card")).toHaveCount(7);
+    await expect(page.locator(".cover-bg")).toHaveCount(7);
   });
 
   test("el buscador filtra por nombre", async ({ page }) => {
@@ -345,7 +366,7 @@ test.describe("biblioteca", () => {
     await page.goto("/biblioteca");
     await page.getByRole("button", { name: "PUZZLE" }).click();
     await expect(page.locator(".card")).toHaveCount(1);
-    await expect(page.locator(".card .title")).toHaveText("CAÍDA");
+    await expect(page.locator(".card .title")).toHaveText("TETRIX");
   });
 
   test("la tarjeta navega al detalle y el botón atrás vuelve", async ({
@@ -356,7 +377,7 @@ test.describe("biblioteca", () => {
     await expect(page).toHaveURL("/juego/serpentina");
     await page.goBack();
     await expect(page).toHaveURL("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(8);
+    await expect(page.locator(".card")).toHaveCount(7);
   });
 });
 
@@ -401,6 +422,10 @@ test.describe("reproductor", () => {
     await expect(modal).toBeVisible();
     await expect(modal.locator("h2")).toHaveText("FIN DEL JUEGO");
 
+    // El nombre no se edita: es el de la sesión y se pinta tal cual.
+    await expect(modal.locator("input")).toHaveCount(0);
+    await expect(modal.locator(".modal-player .v")).toHaveText("PX_KAI");
+
     await modal.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }).click();
     await expect(page.locator(".toast-saved")).toHaveText(
       "▸ PUNTUACIÓN GUARDADA_",
@@ -430,6 +455,144 @@ test.describe("reproductor", () => {
     await signIn(page);
     const response = await page.goto("/jugar/no-existe");
     expect(response?.status()).toBe(404);
+  });
+});
+
+test.describe("fin de partida como invitado", () => {
+  test("el modal pide entrar y lleva a /auth con la puntuación", async ({
+    page,
+  }) => {
+    await playAsGuest(page, "/jugar/serpentina");
+    await freezeRun(page);
+    await page.goto("/jugar/serpentina");
+
+    await page.getByRole("button", { name: "FIN" }).click();
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+
+    // Ni input de nombre ni guardado directo: primero hay que tener cuenta.
+    await expect(modal.locator("input")).toHaveCount(0);
+    await expect(modal.locator(".modal-player .v")).toHaveText("INVITADO");
+    await expect(
+      modal.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }),
+    ).toHaveCount(0);
+    await expect(modal.locator(".guest-save p")).toContainText("invitado");
+
+    await modal
+      .getByRole("button", { name: "INICIAR SESIÓN PARA GUARDAR" })
+      .click();
+
+    // La partida viaja en el `next` para volver a la misma pantalla con ella.
+    await expect(page).toHaveURL(
+      /\/auth\?next=%2Fjugar%2Fserpentina%3Fpuntuacion%3D\d+%26nivel%3D\d+/,
+      { timeout: NAV_TIMEOUT },
+    );
+  });
+
+  test("al volver con sesión la partida aparece guardada", async ({ page }) => {
+    await freezeRun(page);
+    // Con sesión de verdad: el helper signIn() no codifica `next`, así que la
+    // vuelta se reproduce navegando directamente a la URL que /auth entrega.
+    await signIn(page);
+    await page.goto("/jugar/serpentina?puntuacion=42000&nivel=3");
+
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+    // En español sólo se agrupa a partir de cinco dígitos: 4200 va sin punto.
+    await expect(modal.locator(".final")).toHaveText("42.000");
+    await expect(page.locator(".toast-saved")).toHaveText(
+      "▸ PUNTUACIÓN GUARDADA_",
+    );
+    // Y nada se ha persistido: sigue sin existir almacenamiento de marcas.
+    expect(
+      await page.evaluate(() => localStorage.getItem("av_scores")),
+    ).toBeNull();
+  });
+});
+
+test.describe("tetrix", () => {
+  /**
+   * TETRIX es el único juego con motor real, así que aquí no se congela el
+   * reloj ni se filtra ningún intervalo: el bucle necesita requestAnimationFrame
+   * vivo. Nada de lo que se afirma depende de qué pieza salga.
+   */
+  async function openTetrix(page: Page) {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+  }
+
+  test("arranca con el tablero, la pieza siguiente y la cruceta", async ({
+    page,
+  }) => {
+    await openTetrix(page);
+
+    await expect(
+      page.getByRole("img", { name: "Tablero de TETRIX" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("img", { name: "Pieza siguiente" }),
+    ).toBeVisible();
+
+    // El HUD es el común a todos los juegos: una vida, nivel 01, 0 puntos.
+    await expect(page.locator(".hud-stat").nth(1).locator(".v")).toHaveText(
+      "0",
+    );
+    await expect(page.locator(".hud-stat.lives .v")).toHaveText("♥");
+    await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
+
+    // Los cinco botones están dentro de la pantalla; la pausa no.
+    await expect(page.locator(".crt-screen .tetris-pad .btn")).toHaveCount(4);
+    await expect(page.locator(".crt-screen .pad-drop")).toBeVisible();
+    await expect(page.locator(".tetris-side .l")).toHaveText([
+      "MOVIMIENTO",
+      "BAJAR",
+      "SIGUIENTE",
+    ]);
+    for (const label of [
+      "Rotar la pieza",
+      "Mover a la izquierda",
+      "Mover a la derecha",
+      "Bajar más rápido",
+      "Caída instantánea",
+    ]) {
+      await expect(page.getByRole("button", { name: label })).toBeVisible();
+    }
+    await expect(page.locator(".crt-screen").first()).toHaveClass(/tetris/);
+  });
+
+  test("el hard drop puntúa y no desplaza la página", async ({ page }) => {
+    await openTetrix(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+    await expect(score).toHaveText("0");
+
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await page.keyboard.press("Space");
+
+    // +2 por celda recorrida: el valor exacto depende de la pieza, el signo no.
+    await expect
+      .poll(async () => scoreOf(await score.innerText()))
+      .toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  });
+
+  test("PAUSA congela la partida", async ({ page }) => {
+    await openTetrix(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+
+    // Se puntúa antes de pausar para que la comprobación no sea 0 contra 0.
+    await page.keyboard.press("Space");
+    await expect
+      .poll(async () => scoreOf(await score.innerText()))
+      .toBeGreaterThan(0);
+
+    await page.getByRole("button", { name: "PAUSA" }).click();
+    await expect(page.getByText("EN PAUSA")).toBeVisible();
+
+    const pausado = scoreOf(await score.innerText());
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(1000);
+    expect(scoreOf(await score.innerText())).toBe(pausado);
   });
 });
 
@@ -557,14 +720,14 @@ test.describe("auth", () => {
   test("el invitado entra en /jugar sin pasar por el formulario", async ({
     page,
   }) => {
-    await page.goto("/jugar/bloque-buster");
-    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fbloque-buster");
+    await page.goto("/jugar/serpentina");
+    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fserpentina");
 
     await authReady(page);
     await page.getByRole("button", { name: "JUGAR COMO INVITADO" }).click();
 
     // Vuelve al juego que pidió, no a la biblioteca.
-    await expect(page).toHaveURL("/jugar/bloque-buster", {
+    await expect(page).toHaveURL("/jugar/serpentina", {
       timeout: NAV_TIMEOUT,
     });
     await expect(page.locator(".auth-btn").first()).toHaveText("INVITADO ▾");
@@ -594,15 +757,15 @@ test.describe("auth", () => {
   test("/jugar sin sesión manda a /auth y vuelve al juego al entrar", async ({
     page,
   }) => {
-    await page.goto("/jugar/bloque-buster");
-    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fbloque-buster");
+    await page.goto("/jugar/serpentina");
+    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fserpentina");
 
     await authReady(page);
     await page.getByLabel("Correo electrónico").fill(SEED_EMAIL);
     await page.getByLabel("Contraseña").fill(SEED_PASSWORD);
     await page.getByRole("button", { name: "ENTRAR AL VAULT" }).click();
 
-    await expect(page).toHaveURL("/jugar/bloque-buster", {
+    await expect(page).toHaveURL("/jugar/serpentina", {
       timeout: NAV_TIMEOUT,
     });
   });
@@ -652,7 +815,7 @@ test.describe("salón de la fama", () => {
   test("muestra podio, tabla y chips", async ({ page }) => {
     await page.goto("/salon");
     await expect(page.locator(".podium-slot")).toHaveCount(3);
-    await expect(page.locator(".hall-tabs .chip")).toHaveCount(8);
+    await expect(page.locator(".hall-tabs .chip")).toHaveCount(7);
     await expect(page.locator(".hall-table .tr")).toHaveCount(12);
     await expect(page.locator(".podium-slot.gold .rank-num")).toHaveText("01");
   });

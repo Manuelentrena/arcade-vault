@@ -19,6 +19,15 @@
   --yellow: #f5ff00;
   --green: #00ff88;
 
+  /* piezas de TETRIX — los 4 neones más tres mezclas de la misma familia */
+  --piece-i: #00f5ff; /* = --cyan */
+  --piece-o: #f5ff00; /* = --yellow */
+  --piece-t: #ff006e; /* = --magenta */
+  --piece-s: #00ff88; /* = --green */
+  --piece-z: #ff5a1f; /* ámbar: entre magenta y amarillo */
+  --piece-j: #8a5cff; /* violeta: entre cian y magenta */
+  --piece-l: #0077ff; /* azul eléctrico: entre cian y violeta */
+
   /* podium */
   --gold: #ffcf3a;
   --silver: #c7d0e0;
@@ -871,6 +880,12 @@
   position: absolute;
   inset: 0;
 }
+/* Portada en imagen: captura real del juego en vez del dibujo en CSS. */
+.cover-shot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 .cover-bricks {
   background:
@@ -1391,6 +1406,138 @@
   }
 }
 
+/* ===== TETRIX — escenario REAL dentro del CRT (SPEC 13) =====
+   A diferencia de .game-arena, esto no es decoración: aquí se juega. El tablero
+   es un <canvas> a la izquierda y la columna derecha lleva la pieza siguiente y
+   la cruceta. La pausa no vive aquí: es el botón del HUD. */
+.tetris-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2%, 20px);
+  padding: clamp(8px, 2%, 18px);
+  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
+}
+/* La altura manda: el ancho sale de la proporción 10 × 20 del tablero. */
+.tetris-board {
+  display: block;
+  height: 100%;
+  width: auto;
+  aspect-ratio: 1 / 2;
+  image-rendering: pixelated;
+  border: 1px solid var(--line);
+}
+/* La columna se estira a la altura del tablero y su contenido se apoya abajo:
+   así SIGUIENTE queda al nivel del borde inferior del tablero y los mandos
+   quedan justo encima. */
+.tetris-side {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(8px, 2%, 14px);
+  width: clamp(84px, 22%, 180px);
+}
+.tetris-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.tetris-side .l {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--ink-faint);
+  letter-spacing: 0.16em;
+}
+.tetris-next canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--line);
+  image-rendering: pixelated;
+}
+.tetris-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: 100%;
+}
+.tetris-pad .btn {
+  padding: 0;
+  gap: 0;
+  aspect-ratio: 1 / 1;
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tetris-pad .pad-rot {
+  grid-column: 2;
+  grid-row: 1;
+}
+.tetris-pad .pad-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.tetris-pad .pad-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+.tetris-pad .pad-down {
+  grid-column: 2;
+  grid-row: 2;
+}
+.tetris-pad .pad-drop,
+.tetris-side > .tetris-block > .pad-drop {
+  width: 100%;
+  aspect-ratio: auto;
+  padding: 7px 0;
+  font-size: 12px;
+}
+
+/* En móvil la pantalla 4/3 deja la celda del tablero en 11.6px: se ve y no se
+   juega. Con 3/4 sube a ~20px. El modificador sólo se aplica cuando la pantalla
+   hospeda el tablero, así que la escena decorativa conserva su 4/3. */
+@media (max-width: 720px) {
+  .crt-screen.tetris {
+    aspect-ratio: 3 / 4;
+  }
+  /* Con la columna de escritorio los botones quedan en 25px: demasiado poco
+     para un dedo. La columna se fija a 100px y es el tablero el que cede el
+     ancho, a costa de ~1px de celda: 19.9 → 18.6, por encima del mínimo. */
+  .tetris-stage {
+    gap: 8px;
+  }
+  .tetris-side {
+    flex: 0 0 100px;
+    width: 100px;
+  }
+  .tetris-board {
+    height: auto;
+    max-height: 100%;
+    max-width: calc(100% - 108px);
+    /* Aquí el tablero no llena la altura (manda el ancho), así que se apoya
+       abajo para que su borde inferior siga coincidiendo con SIGUIENTE. */
+    align-self: flex-end;
+  }
+  .tetris-pad .btn {
+    aspect-ratio: auto;
+    height: 44px;
+  }
+  .tetris-pad .pad-drop {
+    height: 38px;
+  }
+}
+
 /* game over modal */
 .modal-bd {
   position: fixed;
@@ -1467,6 +1614,42 @@
   margin-top: 18px;
   flex-wrap: wrap;
 }
+/* Ficha del jugador y aviso de invitado dentro del modal de fin de partida. */
+.modal-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.modal-player .l {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.modal-player .v {
+  font-family: var(--pixel);
+  font-size: 14px;
+  color: var(--ink);
+}
+.guest-save {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.guest-save p {
+  margin: 0;
+  max-width: 34ch;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-dim);
+}
+
 .toast-saved {
   font-family: var(--pixel);
   font-size: 11px;
