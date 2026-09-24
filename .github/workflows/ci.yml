@@ -1,0 +1,46 @@
+# Integración continua — SPEC 10.
+#
+# Sin despliegues de preview, esto es lo único que mira el código antes de que
+# entre en `main`. Tres comprobaciones y ningún secreto.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verificar:
+    name: build · tipos · lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Los valores son los del stack local de Docker, los mismos que fija
+      # `playwright.config.ts` en el `env` de su `webServer`. No son secretos:
+      # están en el repositorio y son idénticos en cualquier máquina. Con ellos
+      # el runner no compila jamás contra el proyecto de producción.
+      - name: Compilar
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
+          RESEND_API_KEY: ""
+
+      # Va después del build a propósito: `tsc` necesita los tipos que Next
+      # genera en `.next/types` (`PageProps<"/juego/[id]">`, `LayoutProps<"/">`).
+      # Al revés, la comprobación falla por rutas que están perfectamente bien.
+      - name: Comprobar tipos
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
