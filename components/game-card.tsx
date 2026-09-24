@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRef } from "react";
 import type { Game } from "@/lib/games";
@@ -37,7 +38,18 @@ export function GameCard({ game }: { game: Game }) {
       onMouseLeave={onLeave}
     >
       <div className="cover">
-        <div className={"cover-bg " + game.cover} aria-hidden />
+        {game.image ? (
+          <Image
+            className="cover-bg cover-shot"
+            src={game.image}
+            alt=""
+            aria-hidden
+            fill
+            sizes="(max-width: 720px) 100vw, 320px"
+          />
+        ) : (
+          <div className={"cover-bg " + game.cover} aria-hidden />
+        )}
         <div className="label">{game.cat}</div>
       </div>
       <div className="meta">

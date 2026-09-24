@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Leaderboard } from "@/components/leaderboard";
@@ -15,7 +16,19 @@ export default async function GameDetailPage(props: PageProps<"/juego/[id]">) {
     <div className="av-detail fade-in">
       <div>
         <div className="detail-cover">
-          <div className={"cover-bg " + game.cover} aria-hidden />
+          {game.image ? (
+            <Image
+              className="cover-bg cover-shot"
+              src={game.image}
+              alt=""
+              aria-hidden
+              fill
+              priority
+              sizes="(max-width: 980px) 100vw, 560px"
+            />
+          ) : (
+            <div className={"cover-bg " + game.cover} aria-hidden />
+          )}
         </div>
         <div style={{ marginTop: 20 }} className="detail-info">
           <div className="detail-tags">
