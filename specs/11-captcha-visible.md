@@ -1,6 +1,6 @@
 # SPEC 11 — Captcha visible en `/auth`
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 09
 > **Fecha:** 2026-09-24
 > **Objetivo:** Cambiar el widget de Turnstile de `interaction-only` a `always` para que el captcha se vea en la tarjeta de `/auth`, y ajustar el hueco reservado a la altura real del widget.
