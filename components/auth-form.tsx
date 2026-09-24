@@ -142,9 +142,10 @@ export function AuthForm() {
     const id = turnstile.render(el, {
       sitekey: TURNSTILE_SITE_KEY,
       theme: "dark",
-      // Invisible mientras Cloudflare resuelve solo; sólo se pinta si hace
-      // falta un humano. La tarjeta CRT se queda como está en el caso normal.
-      appearance: "interaction-only",
+      // Visible siempre: en el caso normal Cloudflare resuelve solo y la caja
+      // se queda en verde sin pedir nada. Se pinta para que un captcha que
+      // funciona y uno roto no se vean igual — ver SPEC 11 §1.
+      appearance: "always",
       callback: (token) => setCaptcha(token),
       "expired-callback": () => setCaptcha(""),
       "error-callback": () => setCaptcha(""),

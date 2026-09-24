@@ -109,7 +109,9 @@ Cada clic crea una fila en `auth.users`. El rate limit por IP (`anonymous_users`
 
 `JUGAR COMO INVITADO` crea un usuario real con un solo clic y sin correo: es el endpoint más barato de abusar que tiene el proyecto, y los invitados que un bot cree este mes ya cuentan en la factura aunque la purga los borre a los treinta días. La defensa es un widget de [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) cuyo token viaja en `signInWithPassword`, `signUp` y `signInAnonymously`. `signInWithOAuth` queda fuera: es una redirección y Supabase no le aplica captcha.
 
-En el caso normal el jugador no ve nada — el widget va en modo `interaction-only` y sólo se pinta si Cloudflare necesita a un humano.
+El widget va en modo `always`: la caja de Cloudflare se pinta siempre, centrada sobre el botón de envío. En el caso normal se resuelve sola y se queda en verde sin pedir nada — `always` decide si la caja se ve, no la dificultad del desafío, que la sigue eligiendo Cloudflare con el widget en modo **Managed**.
+
+Se pinta a propósito, y la SPEC 11 explica por qué: en `interaction-only` un captcha que funciona y uno roto se ven exactamente igual, un hueco vacío. Eso costó una investigación entera el día del despliegue, con todo bien configurado. Un captcha invisible que deja de funcionar no avisa.
 
 **Todo cuelga de `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.** Sin esa variable no se carga el script, no se pinta el contenedor y el token viaja como `undefined`. Por eso el stack local, `npm test` y las capturas de referencia funcionan sin tocar nada, y por eso `supabase/config.toml` deja el bloque `[auth.captcha]` comentado: encenderlo en local obligaría a la suite a resolver un captcha real en cada prueba de `/auth`.
 
@@ -461,6 +463,7 @@ npx skills@latest add Klerith/fernando-skills
 | [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)              | Implementado | SPEC 07                            |
 | [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)               | Implementado | SPEC 07                            |
 | [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)  | Implementado | SPEC 09                            |
+| [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                  | Aprobado     | SPEC 09                            |
 
 ## Referencias
 

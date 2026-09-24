@@ -1594,7 +1594,11 @@
 .av-captcha {
   display: flex;
   justify-content: center;
-  min-height: 65px;
+  /* Altura exacta del widget de Turnstile en `size: normal` (300 × 71),
+     medida dentro de esta tarjeta y no en una página desnuda.
+     Sigue siendo min-height y no height: si Cloudflare pinta un desafío más
+     alto, el contenedor crece en vez de recortarlo. */
+  min-height: 71px;
   margin-top: 16px;
 }
 
