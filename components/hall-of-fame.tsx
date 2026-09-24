@@ -81,7 +81,12 @@ export function HallOfFame() {
         </div>
       </div>
 
-      <div className="hall-table">
+      <div
+        className="hall-table"
+        role="region"
+        aria-label="Tabla de puntuaciones"
+        tabIndex={0}
+      >
         <div className="th">
           <div>RANGO</div>
           <div>JUGADOR</div>

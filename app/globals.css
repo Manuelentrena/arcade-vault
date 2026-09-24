@@ -1647,6 +1647,17 @@
   .podium {
     grid-template-columns: 1fr;
   }
+  /* El DOM va en orden de podio (plata, oro, bronce) porque el escritorio pone
+     al campeón en el centro. Apilado, el orden que importa es el del ranking. */
+  .podium-slot.gold {
+    order: 1;
+  }
+  .podium-slot.silver {
+    order: 2;
+  }
+  .podium-slot.bronze {
+    order: 3;
+  }
 }
 .podium-slot {
   position: relative;
@@ -1703,6 +1714,10 @@
 .hall-table {
   border: 1px solid var(--line);
   background: var(--bg-2);
+  /* Las cuatro columnas no caben en 390px sin recortar la cabecera en pixel
+     font hasta lo ilegible. En vez de encogerlas, la caja se arrastra. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 .hall-table .th,
 .hall-table .tr {
@@ -1713,6 +1728,10 @@
   font-family: var(--mono);
   font-size: 13px;
   gap: 10px;
+  /* Suma de las pistas fijas (70 + 140), los tres huecos (30), el padding
+     lateral (36) y un mínimo de 142px para cada una de las dos pistas 1fr —
+     lo que necesitan JUGADOR (~81px) y PUNTUACIÓN (~116px) en pixel font. */
+  min-width: 560px;
 }
 .hall-table .th {
   font-family: var(--pixel);
@@ -1771,14 +1790,20 @@
   letter-spacing: 0.16em;
   background: rgba(245, 255, 0, 0.04);
   border-bottom: 1px solid var(--line-2);
+  /* Es la única fila con su propio grid: sin esto se quedaría del ancho del
+     contenedor y se desalinearía del resto al arrastrar. */
+  min-width: 560px;
 }
 
 @media (max-width: 720px) {
-  .hall-table .th,
-  .hall-table .tr {
-    grid-template-columns: 50px 1fr 90px 90px;
-    font-size: 12px;
-    padding: 10px 12px;
+  /* El widget de Turnstile mide 300px fijos y no se encoge (SPEC 11). Con los
+     paddings de escritorio la tarjeta sólo deja 294px útiles a 390px de ancho y
+     el iframe se sale. Estos paddings dejan 334px. */
+  .av-auth-wrap {
+    padding: 40px 12px;
+  }
+  .auth-card {
+    padding: 24px 16px;
   }
   .av-grid {
     padding: 0 16px;

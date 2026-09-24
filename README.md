@@ -464,6 +464,7 @@ npx skills@latest add Klerith/fernando-skills
 | [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)               | Implementado | SPEC 07                            |
 | [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)  | Implementado | SPEC 09                            |
 | [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                  | Aprobado     | SPEC 09                            |
+| [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)              | Aprobado     | SPEC 11                            |
 
 ## Referencias
 
