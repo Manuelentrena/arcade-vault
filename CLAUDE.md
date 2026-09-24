@@ -119,6 +119,12 @@ Reference screenshots live in `tests/screens.spec.ts-snapshots/`, five per proje
 2. Regenerate only the affected project: `npx playwright test --project=mobile --update-snapshots`.
 3. Leaving the other project's screenshots untouched is the evidence that the change did not leak across viewports — that is a feature, not an oversight.
 
+## Deployment
+
+Two environments and no third: **local** (Docker stack, `npm run dev`, `npm test`) and **production** — Vercel, deployed from `main` only, against the one remote Supabase project. There are no branch previews and no staging, so a `spec-NN-slug` branch produces no deployment: its review is local, plus the CI workflow in `.github/workflows/ci.yml` (`npm ci` → `npm run build` → `npx tsc --noEmit` → `npm run lint`, in that order — `tsc` needs the route types Next writes to `.next/types`). CI carries no GitHub secret; it builds against the same local-stack demo keys `playwright.config.ts` uses.
+
+**Database first, code second.** When a spec brings migrations or Edge Functions, they go to the remote project with `npx supabase db push` / `functions deploy` **before** the merge to `main`, never after — otherwise new code hits an old schema in production. Because there is only one remote, the window between that push and the merge runs the **old** code against the **new** schema, so **every migration must be backward compatible**: add tables, columns or functions; never rename or drop what live code still uses. Removing something is a later spec. Vercel's _Instant Rollback_ returns the code, not the schema — which is why the rule exists. The full per-spec checklist lives in `README.md`, «Despliegue».
+
 ## Spec workflow
 
 Specs live in `specs/NN-slug.md`, numbered sequentially, written in Spanish, with a header carrying state, dependencies, date and a one-sentence objective. States used in this repo: `Borrador`, `Aprobado`, `Implementado`.

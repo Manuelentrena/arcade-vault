@@ -319,6 +319,119 @@ Antes de regenerar, verifica el cambio a mano en el navegador. Una captura regen
 
 La comparación usa `maxDiffPixelRatio: 0.01`, así que un cambio visual pequeño —un enlace más en la barra, por ejemplo— no rompe la suite **ni** actualiza la referencia: `--update-snapshots` sólo reescribe lo que falla. Para poner las capturas al día tras un cambio así hace falta `--update-snapshots=all`.
 
+## Despliegue
+
+La aplicación vive en **Vercel**, y hay **un solo entorno remoto: producción**. Se despliega desde `main` contra el proyecto de Supabase que ya existe — el mismo que tiene OAuth, captcha, migraciones y purga. No hay _staging_, ni segundo proyecto de Supabase, ni despliegues de preview por rama: lo que sustituye a la preview es la revisión local de siempre, `npm run dev` más las capturas de `npm test`.
+
+### Mapa de entornos
+
+|                      | Local                              | Producción                        |
+| -------------------- | ---------------------------------- | --------------------------------- |
+| URL de la aplicación | `http://localhost:3000`            | `https://arcade-vault.vercel.app` |
+| Rama                 | la que sea                         | `main`, y solo `main`             |
+| Supabase             | stack de Docker (`supabase start`) | el proyecto remoto                |
+| Captcha              | apagado                            | activo                            |
+| Resend               | modo simulado                      | clave real                        |
+| Purga de invitados   | manual, tras crear los secretos    | activa, `0 4 * * *` UTC           |
+| Quién lo mira        | tú, con `npm run dev` y `npm test` | cualquiera                        |
+
+El nombre del proyecto en Vercel decide el dominio: `arcade-vault` da `arcade-vault.vercel.app` si está libre, y si no Vercel le añade un sufijo. **El dominio que salga es el valor que va a las _Redirect URLs_ de Supabase y a los hostnames de Turnstile**, así que anótalo antes de seguir.
+
+### Alta del proyecto en Vercel
+
+Todo lo de este apartado es manual y se hace una sola vez. El repositorio no lo automatiza: no hay `vercel.json` ni acciones que hablen con Vercel.
+
+1. **Importar el repositorio.** Vercel → _Add New… → Project_ → importar `arcade-vault` desde GitHub.
+2. **No tocar la configuración de build.** El preset **Next.js** se detecta solo y acierta: _Root Directory_ la raíz, _Build Command_ `next build`, _Install Command_ `npm ci`. **No se añade `vercel.json`** — un fichero que solo repite los valores por defecto es una copia más que mantener, y no hay nada aquí que el preset no resuelva. La aplicación **no es estática**: `proxy.ts` corre en cada petición y las siete rutas son dinámicas porque el layout resuelve la sesión en servidor. El preset de Next lo sirve sin configuración ni adaptador.
+3. **_Production Branch_: `main`** (_Settings → Git_).
+4. **Cortar los despliegues de rama.** En _Settings → Git_, limitar los despliegues a la rama de producción. Una rama `spec-NN-slug` empujada a GitHub no debe producir ningún deployment ni gastar minutos de build. Si esa opción no estuviera en el plan, el equivalente es un _Ignored Build Step_:
+
+   ```bash
+   # Ojo con los códigos, que son al revés de lo que parecen:
+   #   exit 0 → cancela el build
+   #   exit 1 → deja que continúe
+   [ "$VERCEL_ENV" = "production" ] && exit 1 || exit 0
+   ```
+
+5. **Variables de entorno** (abajo), todas marcadas **solo** para _Production_.
+6. **Desplegar** y apuntar el dominio que ha quedado.
+
+#### Variables de entorno en Vercel
+
+_Project Settings → Environment Variables_. Las seis, y solo en _Production_:
+
+| Variable                               | Valor                                  |
+| -------------------------------------- | -------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | `https://<ref>.supabase.co`            |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | la clave publicable del proyecto       |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`       | la _site key_ de Turnstile             |
+| `RESEND_API_KEY`                       | la clave real de Resend                |
+| `CONTACT_TO_EMAIL`                     | el correo de destino                   |
+| `CONTACT_FROM_EMAIL`                   | `Arcade Vault <onboarding@resend.dev>` |
+
+Tres reglas que no conviene saltarse:
+
+- **Ninguna clave de servicio entra en Vercel.** `PURGE_SECRET` y la clave de servicio son secretos de la Edge Function y del Vault de la base, no del hosting de Next. La _secret key_ de Turnstile tampoco: esa la guarda el panel de Supabase, que es quien verifica el token contra Cloudflare.
+- **`NEXT_PUBLIC_*` se incrusta en el build.** Cambiar una en el panel **no toca lo ya desplegado**: hay que hacer un _Redeploy_. Es el mismo motivo por el que `playwright.config.ts` las fija en el `env` de su `webServer`.
+- **Nada marcado como _Preview_ ni _Development_.** No hay más entornos; una variable suelta ahí solo puede confundir dentro de seis meses.
+
+**No existe `NEXT_PUBLIC_SITE_URL` y no hace falta.** `components/auth-form.tsx` construye `emailRedirectTo` y `redirectTo` con `window.location.origin`, y `/auth/callback` y `/auth/confirm` resuelven el destino contra la cabecera `Host`. El código ya es portable entre dominios; una variable con la URL del sitio solo podría desincronizarse.
+
+### Repaso de Supabase y Cloudflare
+
+El proyecto remoto ya quedó configurado en las SPEC 06 a 09. Lo único que cambia al publicar es el dominio desde el que se le habla:
+
+- **Supabase → Authentication → URL Configuration.** _Site URL_ `https://arcade-vault.vercel.app`, y en _Redirect URLs_ `https://arcade-vault.vercel.app/**`. Sin esto, `/auth/callback` canjea el código y redirige a `localhost`: el jugador acaba en una pantalla sin sesión.
+- **Sin comodines de dominio.** Un comodín sobre `*.vercel.app` convertiría `/auth/callback` en un redirector abierto hacia cualquier despliegue de cualquier cuenta. El comodín de ruta (`/**`) sobre el hostname exacto sí es lo correcto.
+- **El origen de `localhost` puede quedarse** en la lista: es lo que permite seguir probando OAuth en local contra el proyecto remoto.
+- **Google y GitHub no se tocan.** Su _callback_ apunta a `https://<ref>.supabase.co/auth/v1/callback`, que no depende del dominio de la aplicación.
+- **Cloudflare → Turnstile.** Añadir `arcade-vault.vercel.app` a los hostnames del widget. Vale el hostname exacto; un comodín sobre `vercel.app` no, porque es un sufijo público.
+- **La purga de invitados no se toca.** Ya está viva en este proyecto, con sus secretos en el Vault.
+
+### Circuito de despliegue por spec
+
+Esto es lo que se repite en cada spec a partir de la SPEC 10:
+
+1. **Implementar.** `/spec-impl NN-slug` crea la rama `spec-NN-slug` y ahí se trabaja.
+2. **Revisar en local. Este es el paso que sustituye a la preview, y es obligatorio:**
+
+   ```bash
+   npm run dev          # recorrer a mano las pantallas que toca la spec
+   npx tsc --noEmit
+   npm run lint
+   npm test             # con el stack de Docker levantado
+   ```
+
+   Si la spec es visual, regenerar **solo** las capturas del proyecto afectado.
+
+3. **Abrir el pull request.** `git push -u origin spec-NN-slug`. CI (`.github/workflows/ci.yml`) tiene que quedar en verde. **Vercel no despliega nada en este paso.**
+4. **Si la spec trae migraciones o Edge Functions, aplicarlas al proyecto remoto _antes_ de mergear:**
+
+   ```bash
+   npx supabase link --project-ref <ref-prod>
+   npx supabase db push
+   npx supabase functions deploy <nombre>   # solo si la spec toca funciones
+   ```
+
+   **La base primero, el código después.** Al revés hay una ventana en la que el código nuevo pega contra un esquema viejo y la aplicación en vivo se rompe.
+
+   Con un solo entorno remoto, entre este paso y el merge **el código que está en producción es el viejo corriendo contra el esquema nuevo**. Por eso la migración tiene que ser **compatible hacia atrás**: añadir tablas, columnas o funciones, nunca renombrar ni borrar lo que el código en vivo usa. Retirar algo es una segunda spec, posterior al despliegue de la primera.
+
+5. **Merge a `main`.** Vercel despliega a producción solo, sin intervención.
+6. **Comprobar en la URL de producción:** las pantallas que tocaba la spec, y `/auth` con OAuth y como invitado. Si algo va mal, _Instant Rollback_ al deployment anterior desde el panel, en segundos. **El rollback devuelve el código, no el esquema** — de ahí la regla del paso 4.
+7. **Cerrar la spec:** estado `Implementado` en su cabecera y en el índice de abajo.
+8. **Borrar la rama y devolver la CLI a local:**
+
+   ```bash
+   npx supabase unlink
+   ```
+
+   `supabase link` deja el `project_ref` en `supabase/.temp/`, y olvidarse de eso es lo que convierte el siguiente `db reset` en un susto.
+
+### Limitación conocida: el alta por correo
+
+Sin dominio propio, el SMTP por defecto de Supabase solo entrega a direcciones del equipo del proyecto, y Resend con `onboarding@resend.dev` solo escribe a la dirección de la propia cuenta. **En producción se entra por Google, por GitHub o como invitado**; el registro con correo y contraseña queda a medias hasta que haya dominio propio y SMTP, que es otra spec. En local no afecta: los correos aterrizan en Mailpit.
+
 ## Desarrollo guiado por specs
 
 Cada funcionalidad se escribe primero como spec y solo después como código. Dos skills gobiernan el flujo:
@@ -347,6 +460,7 @@ npx skills@latest add Klerith/fernando-skills
 | [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md)                     | Implementado | SPEC 06                            |
 | [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)              | Implementado | SPEC 07                            |
 | [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)               | Implementado | SPEC 07                            |
+| [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)  | Implementado | SPEC 09                            |
 
 ## Referencias
 
