@@ -28,6 +28,15 @@
   --piece-j: #8a5cff; /* violeta: entre cian y magenta */
   --piece-l: #0077ff; /* azul eléctrico: entre cian y violeta */
 
+  /* ladrillos de ARKANOID — la misma familia que las piezas de TETRIX */
+  --brick-cyan: #00f5ff; /* = --cyan */
+  --brick-magenta: #ff006e; /* = --magenta */
+  --brick-yellow: #f5ff00; /* = --yellow */
+  --brick-green: #00ff88; /* = --green */
+  --brick-amber: #ff5a1f; /* = --piece-z, en lugar del rojo */
+  --brick-violet: #8a5cff; /* = --piece-j, en lugar del hotpink */
+  --brick-silver: #c7d0e0; /* = --silver: el ladrillo neutro del muro 2 */
+
   /* ASTEROIDES — los mismos neones de la web, repartidos por elemento */
   --rock-ship: #00f5ff; /* = --cyan */
   --rock-rock: #8a5cff; /* = --piece-j, violeta */
@@ -1844,6 +1853,66 @@
 @keyframes caret {
   50% {
     border-color: transparent;
+  }
+}
+
+/* ===== ARKANOID — tercer escenario REAL dentro del CRT (SPEC 15) =====
+   El tablero es 800 × 600, o sea el mismo 4 / 3 de .crt-screen, así que no
+   necesita ningún modificador de proporción. El escenario es una columna: el
+   tablero arriba y los tres mandos en una franja propia debajo, nunca encima
+   del campo de juego —la pala vive en y = 560 de 600 y los botones la tapaban—.
+   El tablero se dimensiona por la altura que sobra y conserva su 4 / 3, así que
+   deja bandas laterales, igual que el de TETRIX. La pausa tampoco vive aquí: es
+   el botón del HUD. */
+.ark-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(6px, 1.5%, 14px);
+  padding: clamp(6px, 1.5%, 14px);
+  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
+}
+/* La altura manda: el ancho sale de la proporción 4 / 3 del tablero. */
+.ark-board {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  aspect-ratio: 4 / 3;
+  image-rendering: pixelated;
+  touch-action: none;
+}
+/* Franja propia bajo el tablero: los mandos ya no pisan la pala. Van en los
+   extremos y en el centro, y se aclaran al pulsarlos. */
+.ark-pad {
+  flex: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 clamp(8px, 3%, 22px);
+}
+.ark-pad .btn {
+  opacity: 0.75;
+  background: rgba(0, 0, 0, 0.45);
+  font-family: var(--mono);
+  letter-spacing: 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ark-pad .btn:active,
+.ark-pad .btn:focus-visible {
+  opacity: 1;
+}
+@media (max-width: 720px) {
+  .ark-pad .btn {
+    min-height: 44px;
   }
 }
 

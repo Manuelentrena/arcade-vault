@@ -340,10 +340,10 @@ test.describe("home sin animación de entrada", () => {
 });
 
 test.describe("biblioteca", () => {
-  test("muestra los 7 juegos", async ({ page }) => {
+  test("muestra los 8 juegos", async ({ page }) => {
     await page.goto("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(7);
-    await expect(page.locator(".cover-bg")).toHaveCount(7);
+    await expect(page.locator(".card")).toHaveCount(8);
+    await expect(page.locator(".cover-bg")).toHaveCount(8);
   });
 
   test("el buscador filtra por nombre", async ({ page }) => {
@@ -393,7 +393,7 @@ test.describe("biblioteca", () => {
     await expect(page).toHaveURL("/juego/serpentina");
     await page.goBack();
     await expect(page).toHaveURL("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(7);
+    await expect(page.locator(".card")).toHaveCount(8);
   });
 });
 
@@ -710,6 +710,99 @@ test.describe("asteroides", () => {
   });
 });
 
+test.describe("arkanoid", () => {
+  /**
+   * El tercer juego con motor real. Como en tetrix y asteroides, aquí no se
+   * congela el reloj: el bucle necesita requestAnimationFrame vivo. El muro del
+   * nivel 1 es el relleno completo y el saque es determinista, así que nada de
+   * lo que se afirma depende de la suerte ni de cuántos fotogramas pasen.
+   */
+  async function openArkanoid(page: Page) {
+    await signIn(page);
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".ark-board")).toBeVisible();
+  }
+
+  test("arranca con el tablero y los tres mandos", async ({ page }) => {
+    await openArkanoid(page);
+
+    await expect(
+      page.getByRole("img", { name: "Tablero de ARKANOID" }),
+    ).toBeVisible();
+
+    // El HUD es el común a todos los juegos: tres vidas, nivel 01, 0 puntos.
+    await expect(page.locator(".hud-stat").nth(1).locator(".v")).toHaveText(
+      "0",
+    );
+    await expect(page.locator(".hud-stat.lives .v")).toHaveText("♥ ♥ ♥");
+    await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
+
+    // Los tres mandos están dentro de la pantalla; la pausa no.
+    await expect(page.locator(".crt-screen .ark-pad .btn")).toHaveCount(3);
+    for (const label of [
+      "Mover la pala a la izquierda",
+      "Lanzar la bola",
+      "Mover la pala a la derecha",
+    ]) {
+      await expect(page.getByRole("button", { name: label })).toBeVisible();
+    }
+    await expect(
+      page.locator(".crt-screen").getByRole("button", { name: /PAUSA/ }),
+    ).toHaveCount(0);
+  });
+
+  test("romper ladrillos puntúa y no desplaza la página", async ({ page }) => {
+    await openArkanoid(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+    await expect(score).toHaveText("0");
+
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await page.keyboard.press("Space");
+
+    // +10 por ladrillo en el nivel 1: el valor exacto no importa, el signo sí.
+    await expect
+      .poll(async () => scoreOf(await score.innerText()), { timeout: 15000 })
+      .toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  });
+
+  test("PAUSA congela la partida", async ({ page }) => {
+    await openArkanoid(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+
+    await page.keyboard.press("Space");
+    await page.getByRole("button", { name: "PAUSA" }).click();
+    await expect(page.getByText("EN PAUSA")).toBeVisible();
+
+    // Con el bucle parado la puntuación no se mueve.
+    const pausado = scoreOf(await score.innerText());
+    await page.waitForTimeout(1000);
+    expect(scoreOf(await score.innerText())).toBe(pausado);
+
+    await page.getByRole("button", { name: "REANUDAR" }).click();
+    await expect(page.getByText("EN PAUSA")).toHaveCount(0);
+  });
+
+  test("el HUD es el mismo que el de un juego decorativo", async ({ page }) => {
+    await signIn(page);
+
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".ark-board")).toBeVisible();
+    const conMotor = await page.locator(".player-hud .hud-stat .l").allInnerTexts();
+    const botonesMotor = await page.locator(".hud-actions .btn").allInnerTexts();
+
+    await page.goto("/jugar/serpentina");
+    await expect(page.locator(".game-arena")).toBeVisible();
+    const decorativo = await page.locator(".player-hud .hud-stat .l").allInnerTexts();
+    const botonesDecorativo = await page.locator(".hud-actions .btn").allInnerTexts();
+
+    expect(conMotor).toEqual(decorativo);
+    expect(conMotor).toHaveLength(4);
+    expect(botonesMotor).toEqual(botonesDecorativo);
+    expect(botonesMotor).toHaveLength(3);
+  });
+});
+
 test.describe("auth", () => {
   test("la pestaña CREAR CUENTA añade el usuario", async ({ page }) => {
     await page.goto("/auth");
@@ -929,7 +1022,7 @@ test.describe("salón de la fama", () => {
   test("muestra podio, tabla y chips", async ({ page }) => {
     await page.goto("/salon");
     await expect(page.locator(".podium-slot")).toHaveCount(3);
-    await expect(page.locator(".hall-tabs .chip")).toHaveCount(7);
+    await expect(page.locator(".hall-tabs .chip")).toHaveCount(8);
     await expect(page.locator(".hall-table .tr")).toHaveCount(12);
     await expect(page.locator(".podium-slot.gold .rank-num")).toHaveText("01");
   });
