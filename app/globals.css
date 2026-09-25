@@ -28,6 +28,16 @@
   --piece-j: #8a5cff; /* violeta: entre cian y magenta */
   --piece-l: #0077ff; /* azul eléctrico: entre cian y violeta */
 
+  /* ASTEROIDES — los mismos neones de la web, repartidos por elemento */
+  --rock-ship: #00f5ff; /* = --cyan */
+  --rock-rock: #8a5cff; /* = --piece-j, violeta */
+  --rock-bullet: #f5ff00; /* = --yellow */
+  --rock-flame: #ff5a1f; /* = --piece-z, ámbar */
+  --rock-triple: #ff006e; /* = --magenta */
+  --rock-shield: #00ff88; /* = --green */
+  --rock-grid: rgba(0, 245, 255, 0.14);
+  --rock-horizon: rgba(255, 0, 110, 0.35);
+
   /* podium */
   --gold: #ffcf3a;
   --silver: #c7d0e0;
@@ -1535,6 +1545,167 @@
   }
   .tetris-pad .pad-drop {
     height: 38px;
+  }
+}
+
+/* ===== ASTEROIDES — segundo escenario REAL dentro del CRT (SPEC 14) =====
+   Mismo mueble que TETRIX y clases propias: el campo es un <canvas> a la
+   izquierda y la columna derecha lleva los mandos y la leyenda de objetos. La
+   pausa tampoco vive aquí: es el botón del HUD. El fondo lo pinta el canvas. */
+.rocks-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2%, 20px);
+  padding: clamp(8px, 2%, 18px);
+  background: #000;
+}
+/* El lienzo tiene tamaño propio (800 × 600): con los dos máximos y las medidas
+   en auto se escala manteniendo la proporción, y manda la que se quede corta —
+   el ancho en escritorio, el alto en móvil. */
+.rocks-field {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+}
+.rocks-side {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2%, 14px);
+  width: clamp(84px, 22%, 180px);
+  flex: 0 0 auto;
+}
+.rocks-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.rocks-side .l {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--ink-faint);
+  letter-spacing: 0.16em;
+}
+.rocks-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: 100%;
+}
+.rocks-pad .btn {
+  padding: 0;
+  gap: 0;
+  aspect-ratio: 1 / 1;
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.rocks-pad .pad-thrust {
+  grid-column: 2;
+  grid-row: 1;
+}
+.rocks-pad .pad-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.rocks-pad .pad-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+.rocks-side .pad-fire {
+  width: 100%;
+  padding: 7px 0;
+  font-size: 11px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* La leyenda es lo que hace legible el campo: dos filas, símbolo y nombre. */
+.rocks-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rocks-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
+}
+.rocks-legend .k {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 2px 4px;
+  border: 1px solid currentColor;
+  font-size: 9px;
+  line-height: 1;
+}
+.rocks-legend .triple {
+  color: var(--rock-triple);
+}
+.rocks-legend .shield {
+  color: var(--rock-shield);
+}
+
+/* A 390px la columna lateral dejaría el campo en 202 × 151: se ve y no se
+   juega. El escenario se apila, la pantalla pasa a 3/4 y los mandos bajan a una
+   fila con la cruceta a la izquierda y el fuego a la derecha. */
+@media (max-width: 720px) {
+  .crt-screen.rocks {
+    aspect-ratio: 3 / 4;
+  }
+  .rocks-stage {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .rocks-side {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    align-self: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+  .rocks-block {
+    width: auto;
+  }
+  .rocks-pad {
+    width: 93px;
+  }
+  .rocks-pad .btn {
+    aspect-ratio: auto;
+    height: 44px;
+  }
+  .rocks-side .pad-fire {
+    height: 44px;
+    padding: 0 14px;
+  }
+  .rocks-objects {
+    align-items: flex-end;
   }
 }
 

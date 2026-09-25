@@ -1,6 +1,6 @@
 # SPEC 14 — ASTEROIDES: segundo juego con motor real dentro del CRT
 
-> **Estado:** Aprovado
+> **Estado:** Implementado
 > **Depende de:** SPEC 01, SPEC 04, SPEC 13
 > **Fecha:** 2026-09-25
 > **Objetivo:** Convertir la entrada decorativa `ROCAS` en un `ASTEROIDES` jugable de verdad, con el motor de `references/started-games/02-asteroids/` portado a React y encajado dentro de la pantalla CRT, reutilizando sin tocarlos el HUD común y el modal de fin que ya sirven a `TETRIX`.
