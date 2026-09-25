@@ -1,6 +1,6 @@
 # SPEC 15 — ARKANOID: segundo motor real dentro del CRT
 
-> **Estado:** Borrador
+> **Estado:** Aprovado
 > **Depende de:** SPEC 01, SPEC 04, SPEC 13
 > **Fecha:** 2026-09-25
 > **Objetivo:** Añadir `ARKANOID` como octavo juego del catálogo con el rompeladrillos de `references/started-games/04-arkanoid/` portado a React —niveles infinitos, bola cada vez más rápida y todo dibujado con la paleta de la web—, encajado en la pantalla CRT y en el HUD común que ya estableció la SPEC 13, sin persistir ninguna puntuación.
