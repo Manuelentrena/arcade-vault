@@ -1,7 +1,7 @@
-# SPEC 15 — ARKANOID: segundo motor real dentro del CRT
+# SPEC 15 — ARKANOID: tercer motor real dentro del CRT
 
-> **Estado:** Aprovado
-> **Depende de:** SPEC 01, SPEC 04, SPEC 13
+> **Estado:** Implementado
+> **Depende de:** SPEC 01, SPEC 04, SPEC 13, SPEC 14
 > **Fecha:** 2026-09-25
 > **Objetivo:** Añadir `ARKANOID` como octavo juego del catálogo con el rompeladrillos de `references/started-games/04-arkanoid/` portado a React —niveles infinitos, bola cada vez más rápida y todo dibujado con la paleta de la web—, encajado en la pantalla CRT y en el HUD común que ya estableció la SPEC 13, sin persistir ninguna puntuación.
 
@@ -344,7 +344,7 @@ Clases nuevas en `app/globals.css`, junto al bloque de TETRIX y con un comentari
 - `.ark-pad` — `position: absolute;` sobre el borde inferior, tres botones `.btn` repartidos con `justify-content: space-between` y `padding` lateral. `opacity: .55`, `:active` y `:focus-visible` a `1`; fondo semitransparente para que la pala se siga viendo por debajo cuando pasa; `touch-action: manipulation` y `user-select: none`.
 - En `@media (max-width: 720px)` los tres botones pasan a `44px` de alto, que es el mínimo táctil.
 
-El compromiso está en que los mandos caen sobre la franja donde vive la pala (`y = 560` de 600, el 93 % de la altura). Se acepta a cambio de no robarle altura al tablero: los botones van en los extremos y en el centro exacto, semitransparentes, y el control principal con el dedo es el arrastre —los botones son el respaldo. Está anotado en §7.
+~~El compromiso está en que los mandos caen sobre la franja donde vive la pala (`y = 560` de 600, el 93 % de la altura). Se acepta a cambio de no robarle altura al tablero.~~ **Revisado tras la implementación (§8):** el solape se midió y era severo —en móvil un botón de 44 px equivale a 113 unidades del mundo, así que los mandos ocupaban de `y = 471` a `y = 585` y se tragaban la pala entera—. Los mandos pasan a una **franja propia bajo el tablero**: `.ark-stage` es una columna, el tablero se dimensiona por la altura que le sobra y conserva su `4 / 3`, dejando bandas laterales como ya hace el de TETRIX. El arrastre sigue siendo el control principal.
 
 ### 3.6 Lo que se dibuja
 
@@ -522,12 +522,74 @@ Cada paso deja el proyecto compilando y la suite en un estado conocido.
 | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | La bola atraviesa un ladrillo o una pared a velocidad alta, o al volver de una pestaña en segundo plano | Subpasos de 8 px como máximo y `dt` limitado a 50 ms (§3.2). Criterio de aceptación propio que lo verifica con el tope de velocidad puesto.                                                                     |
 | Un muro generado resulta imposible, trivial o deja un ladrillo inalcanzable                     | Simetría por construcción, densidad mínima del 55 %, suelo de ocho ladrillos y rebote con ángulo apuntable —que es lo que permite llegar a una esquina. Si aun así aparece un caso malo, la generación está en una sola función pura y se ajusta ahí. |
-| Los mandos superpuestos tapan la pala, que vive en el 93 % de la altura                         | Botones en los extremos y en el centro exacto, semitransparentes (`opacity: .55`) y con fondo `rgba`, de modo que la pala se ve por debajo. El control principal con el dedo es el arrastre. Verificado a mano a 390px antes de regenerar capturas. |
+| ~~Los mandos superpuestos tapan la pala, que vive en el 93 % de la altura~~ **Se materializó**   | La semitransparencia no bastaba: medido, el pad iba de `y = 471` a `y = 585` en móvil y la pala vive en `560..574`. Resuelto sacando los mandos del tablero a una franja propia debajo (§3.5, §8). Ya no hay solape a ningún ancho. |
 | El arrastre sobre el tablero pelea con el desplazamiento de la página en móvil                  | `touch-action: none` en `.ark-board` y `preventDefault()` en `pointerdown`. El reproductor no tiene scroll propio relevante y el manejador se desmonta con el componente.                                      |
 | El bucle `requestAnimationFrame` sobrevive al desmontar o al abrir el modal                     | `cancelAnimationFrame` en el `cleanup` del efecto y en las transiciones a `paused` y `over`, igual que en `components/tetris-game.tsx:300`. Criterio de aceptación explícito.                                   |
 | Doble verdad sobre la pausa entre el HUD y la tecla `P`                                         | `P` no guarda estado local: llama al mismo `onTogglePause` del reproductor, que sigue siendo el único dueño de `paused`.                                                                                        |
 | Las cuatro capturas regeneradas consagran una regresión visual                                  | El paso 7 exige verificar `/biblioteca` y `/salon` a mano en los dos anchos antes de regenerar, y el diff está acotado a cuatro ficheros. Es la regla de `CLAUDE.md`.                                            |
-| A 390px el tablero queda en ~310 × 232 px y la pala en ~31 px                                   | Se juega, pero justo. Es la consecuencia de mantener el `4 / 3` del tubo y no se compensa aquí: cambiar la proporción de la pantalla en un juego más ancho que alto lo empeoraría. Si molesta, el ajuste es ampliar la pala en espacio lógico, una constante en `lib/arkanoid.ts`. |
+| A 390px el tablero queda en ~227 × 171 px y la pala en ~23 px (tras mover los mandos a su franja) | Se juega, pero justo. Es la consecuencia de mantener el `4 / 3` del tubo y no se compensa aquí: cambiar la proporción de la pantalla en un juego más ancho que alto lo empeoraría. Si molesta, el ajuste es ampliar la pala en espacio lógico, una constante en `lib/arkanoid.ts`. |
 | Dos motores comparten un contrato de props que ningún test obliga a respetar                    | El test 4 de §3.8 compara el HUD de los dos juegos jugables y el decorativo. No es una comprobación de tipos, pero sí detecta el día en que uno de los dos empiece a pintar su propio HUD.                       |
 | Alguien añade un noveno juego y vuelve a romper los recuentos de la suite                       | §1.3 deja escrito qué deriva del array y qué no. No se añade abstracción para evitarlo: es una tabla de datos de ocho entradas.                                                                                |
 | `prefers-reduced-motion` no detiene el juego                                                    | Deliberado, igual que en TETRIX: el movimiento **es** el contenido de la pantalla. La lista de `@media (prefers-reduced-motion: reduce)` sigue cubriendo la escena decorativa y no se amplía.                    |
+
+---
+
+## 8. Desviaciones registradas en la implementación
+
+Tres puntos del diseño no sobrevivieron al contacto con el árbol. Los dos
+primeros son desfase: esta spec se escribió antes de que la SPEC 14 se fusionara,
+y ninguno cambia el comportamiento. El tercero sí es un cambio de diseño, pedido
+al revisar la implementación.
+
+- **§3.7 — el registro de motores ya existía.** El diseño describe convertir
+  `PLAYABLE_ID` en una tabla literal `PLAYABLE: Record<string, number>` y un
+  ternario anidado en el JSX, cerrando con «la abstracción entra cuando haya un
+  tercer motor». La SPEC 14 ya hizo esa refactorización: `components/game-player.tsx`
+  trae `ENGINES: Record<string, { Component, lives, screen }>` con dos filas, y
+  `CLAUDE.md` fija la regla de que un tercer motor es **una fila más, no otra
+  rama**. `ARKANOID` entra como tercera fila de `ENGINES` con `screen: ""` —vacío
+  porque su tablero ya es el `4 / 3` del tubo y no necesita modificador de
+  proporción, que es justo lo que pide §3.5—. El único ajuste extra es que la
+  clase de `.crt-screen` se compone con `engine?.screen ? …` en lugar de
+  `engine ? …`, para no emitir un espacio sobrante con el modificador vacío.
+- **§4 paso 7 y §5 — se regeneran cuatro capturas, pero sólo dos fallaban.**
+  `playwright.config.ts` compara con `maxDiffPixelRatio: 0.01`. Las dos de
+  `mobile` fallan de largo (`biblioteca` cambia de alto al entrar una fila nueva
+  en la rejilla; `salon` difiere en 45 937 px, ratio 0,07). Las dos de `desktop`
+  cambian de verdad —`biblioteca` 11 882 px por la tarjeta nueva y `salon`
+  2 743 px por el chip nuevo— pero se quedan justo en el 0,01 del umbral y
+  pasaban sin tocarlas. Se regeneran igualmente con `--update-snapshots=all`
+  acotado a esas dos: una captura de referencia que enseña siete juegos mientras
+  la aplicación enseña ocho no es una referencia, sólo una que aprueba por
+  tolerancia. El recuento final es el que pide §5: exactamente cuatro de catorce.
+- **§3.5 — los mandos salen del tablero a una franja propia.** El diseño aceptaba
+  que los tres botones cayeran sobre la franja de la pala, confiando en la
+  semitransparencia. Medido en el navegador no se sostiene: en móvil el tablero
+  queda en 310 × 233 px, así que un botón de 44 px —el mínimo táctil, que es un
+  criterio de §5— mide 113 de las 600 unidades del mundo, y el pad ocupaba de
+  `y = 471` a `y = 585` con la pala en `560..574`. A petición expresa, `.ark-stage`
+  pasa a ser una columna: el tablero arriba, dimensionado por la altura que le
+  sobra y conservando su `4 / 3`, y los mandos en una franja propia debajo. El
+  coste es el que ya paga TETRIX —bandas laterales— y un tablero más pequeño:
+  1004 × 753 → 898 × 673 en escritorio y 310 × 233 → 227 × 171 en móvil. A cambio
+  los botones no pisan el campo de juego a ningún ancho. `.crt-screen` sigue en
+  `4 / 3` y sigue sin modificador de proporción, que es lo que pide §5, y ninguna
+  captura de referencia cambia: la del reproductor es la de `/jugar/serpentina`.
+
+### Lo que se verificó a mano
+
+Con el stack local y `npm run dev`, en `/jugar/arkanoid` como invitado: la bola
+rebota en las tres paredes y sale por abajo; la pala se mueve con `←`/`→` a
+480 px/s y se detiene en los bordes; el arrastre del puntero la coloca; `Espacio`
+saca sin desplazar la página; `PAUSA` y `P` alternan el mismo estado y la
+puntuación no avanza en pausa. Perder una bola resta una vida y deja el muro
+intacto. Al limpiar el muro del nivel 1 el HUD pasó a `Nivel 02` y la puntuación
+de 590 a 700 —el último ladrillo (+10) más el bono `100 × nivel`— y en el nivel 2
+cada ladrillo pasó a valer 20, que es `10 × nivel`. El modal de fin muestra la
+puntuación final y la rama de invitado, y `JUGAR DE NUEVO` devuelve los 60
+ladrillos, `0` puntos, `Nivel 01` y tres corazones. A 390 px los tres botones
+miden 44 px de alto, `.crt-screen` conserva el `4 / 3` sin modificador y no hay
+desbordamiento horizontal. Tras mover los mandos a su franja (§8) se volvió a
+medir: no hay solape entre el pad y el tablero ni a 1440 px ni a 390 px, el
+tablero mantiene su `4 / 3` en los dos, y el arrastre sigue mapeando exacto —el
+20 % del ancho cae en la unidad 160 del mundo y el 80 % en la 640—.
