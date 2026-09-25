@@ -103,6 +103,18 @@ export const GAMES: Game[] = [
     best: 24,
     plays: "4.2K",
   },
+  {
+    id: "arkanoid",
+    title: "ARKANOID",
+    short: "Rompe el muro sin dejar caer la bola.",
+    long: "Una bola de neón rebota entre las paredes de la pantalla y tú sólo controlas la pala. Rompe todos los ladrillos para pasar de nivel: el muro cambia en cada uno y la bola va cada vez más rápida, sin final. Golpea con el borde de la pala para desviarla y apuntar. Tres vidas; cuando cae la última bola, se acabó.",
+    cat: "ARCADE",
+    cover: "cover-bricks",
+    image: "/juegos/arkanoid.png",
+    color: "cyan",
+    best: 128640,
+    plays: "12.7K",
+  },
 ];
 
 export const CATS = ["TODOS", "ARCADE", "PUZZLE", "SHOOTER", "VERSUS"] as const;

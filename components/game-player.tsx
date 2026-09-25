@@ -10,9 +10,11 @@ import {
   type ComponentType,
 } from "react";
 import { useSession } from "@/components/session-provider";
+import { ArkanoidGame } from "@/components/arkanoid-game";
 import { AsteroidsGame } from "@/components/asteroids-game";
 import { TetrisGame } from "@/components/tetris-game";
 import type { Game } from "@/lib/games";
+import { LIVES as ARKANOID_LIVES } from "@/lib/arkanoid";
 import { LIVES as ASTEROIDS_LIVES } from "@/lib/asteroids";
 import { LIVES as TETRIX_LIVES } from "@/lib/tetris";
 import { displayName } from "@/lib/supabase/user";
@@ -43,8 +45,9 @@ export type EngineProps = {
 
 /**
  * Los juegos con motor real. `lives` es con cuántas vidas arranca el HUD y
- * `screen` el modificador que se añade a `.crt-screen`. Un id que no esté aquí
- * sigue con la escena decorativa.
+ * `screen` el modificador que se añade a `.crt-screen` —vacío cuando el motor
+ * ya encaja en el 4 / 3 del tubo. Un id que no esté aquí sigue con la escena
+ * decorativa.
  */
 const ENGINES: Record<
   string,
@@ -56,6 +59,7 @@ const ENGINES: Record<
     lives: ASTEROIDS_LIVES,
     screen: "rocks",
   },
+  arkanoid: { Component: ArkanoidGame, lives: ARKANOID_LIVES, screen: "" },
 };
 
 type Run = EngineRun;
@@ -176,7 +180,7 @@ export function GamePlayer({
       </div>
 
       <div className="crt">
-        <div className={"crt-screen" + (engine ? " " + engine.screen : "")}>
+        <div className={"crt-screen" + (engine?.screen ? " " + engine.screen : "")}>
           {engine ? (
             <engine.Component
               key={runKey}
