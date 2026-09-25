@@ -6,9 +6,9 @@ Plataforma web para jugar a clásicos arcade y competir por la mayor puntuación
 
 El repo contiene una **maqueta navegable completa**: siete pantallas reales sobre Next.js App Router, con navegación, filtros, formulario de sesión y tablas de puntuaciones funcionando de extremo a extremo. Lo que todavía **no** existe:
 
-- **Cinco de los siete juegos son decorativos.** Las excepciones son dos. `TETRIX` (SPEC 13): tablero de 10 × 20 dentro de la pantalla CRT, siete tetrominós, rotación con _wall kicks_, pieza fantasma, vista de la siguiente, soft y hard drop, una vida y diez niveles. Y `ASTEROIDES` (SPEC 14): nave con inercia en un mundo que envuelve por los bordes, rocas que se parten en dos a cada impacto, oleadas que crecen hasta diez rocas, dos objetos —disparo triple y escudo— y una vida. En los otros cinco el reproductor (`/jugar/[id]`) sigue animando una escena CRT y subiendo la puntuación sola con un temporizador; no se juega nada.
-- **Las puntuaciones de los dos juegos reales tampoco se guardan.** El motor calcula una puntuación real durante la partida, pero `GUARDAR PUNTUACIÓN` del modal sigue siendo decorativo: no hay tabla ni petición. A un invitado el modal le pide entrar con Google, GitHub o correo antes de guardar, y al volver de `/auth` recupera su puntuación — que viaja en la URL (`?puntuacion=&nivel=`) y tampoco se escribe en ningún sitio.
-- **Los datos del catálogo siguen siendo estáticos.** Los siete juegos viven en `lib/games.ts`. En base de datos sólo está lo que sostiene la sesión: `public.profiles`, el esquema `auth` de Supabase y la purga diaria de invitados.
+- **Cinco de los ocho juegos son decorativos.** Las excepciones son tres. `TETRIX` (SPEC 13): tablero de 10 × 20 dentro de la pantalla CRT, siete tetrominós, rotación con _wall kicks_, pieza fantasma, vista de la siguiente, soft y hard drop, una vida y diez niveles. `ASTEROIDES` (SPEC 14): nave con inercia en un mundo que envuelve por los bordes, rocas que se parten en dos a cada impacto, oleadas que crecen hasta diez rocas, dos objetos —disparo triple y escudo— y una vida. Y `ARKANOID` (SPEC 15): bola que rebota entre tres paredes, pala que apunta según dónde golpee, muro distinto en cada nivel —los cinco de la referencia y, del sexto en adelante, generados de forma determinista—, bola cada vez más rápida hasta un tope y tres vidas. En los otros cinco el reproductor (`/jugar/[id]`) sigue animando una escena CRT y subiendo la puntuación sola con un temporizador; no se juega nada.
+- **Las puntuaciones de los tres juegos reales tampoco se guardan.** El motor calcula una puntuación real durante la partida, pero `GUARDAR PUNTUACIÓN` del modal sigue siendo decorativo: no hay tabla ni petición. A un invitado el modal le pide entrar con Google, GitHub o correo antes de guardar, y al volver de `/auth` recupera su puntuación — que viaja en la URL (`?puntuacion=&nivel=`) y tampoco se escribe en ningún sitio.
+- **Los datos del catálogo siguen siendo estáticos.** Los ocho juegos viven en `lib/games.ts`. En base de datos sólo está lo que sostiene la sesión: `public.profiles`, el esquema `auth` de Supabase y la purga diaria de invitados.
 - **La sesión ya es real.** `/auth` habla con Supabase Auth: correo y contraseña con confirmación por correo, y OAuth de Google y GitHub si están dados de alta. La sesión vive en cookies, no en `localStorage`, y `/jugar/[id]` exige estar dentro.
 - **Las puntuaciones no se guardan.** Las genera un LCG determinista (`seededScores()` en `lib/scores.ts`) a partir del `id` del juego, así que son siempre las mismas y nadie las escribe.
 - **No hay página de cuenta de usuario ni internacionalización.** La interfaz es solo español y solo tema oscuro.
@@ -221,9 +221,9 @@ Vive en `supabase/templates/confirmation.html` y `supabase/config.toml` la enlaz
 | Ruta          | Fichero                   | Qué muestra                                                                                                                               |
 | ------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `/`           | `app/page.tsx`            | Portada: hero, por qué Arcade Vault, avance de seis juegos, cifras, actividad en vivo, precios y llamada final.                           |
-| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los siete juegos.                                                             |
+| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos.                                                             |
 | `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe.         |
-| `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: HUD con puntuación, vidas y nivel, pausa, `FIN` y modal de fin. El registro `ENGINES` decide qué monta dentro: `TETRIX` y `ASTEROIDES` llevan motor real; el resto, una escena CRT animada. `notFound()` si el `id` no existe. |
+| `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: HUD con puntuación, vidas y nivel, pausa, `FIN` y modal de fin. El registro `ENGINES` decide qué monta dentro: `TETRIX`, `ASTEROIDES` y `ARKANOID` llevan motor real; el resto, una escena CRT animada. `notFound()` si el `id` no existe. |
 | `/auth`       | `app/auth/page.tsx`       | Entrar, crear cuenta o jugar como invitado contra Supabase Auth. Aterriza en `?next=` o, si no lo hay, en la biblioteca.                  |
 | `/salon`      | `app/salon/page.tsx`      | Salón de la Fama: podio, tabla de puntuaciones y selector de juego.                                                                       |
 | `/acerca`     | `app/acerca/page.tsx`     | Acerca de: misión, destacados y formulario de contacto que envía por Resend.                                                              |
@@ -263,6 +263,7 @@ components/               # componentes de interfaz
   game-player.tsx         # reproductor CRT, HUD y modal de fin de partida
   tetris-game.tsx         # canvas, bucle y mandos de TETRIX dentro del CRT
   asteroids-game.tsx      # canvas, bucle y mandos de ASTEROIDES dentro del CRT
+  arkanoid-game.tsx       # canvas, bucle y mandos de ARKANOID dentro del CRT
   auth-form.tsx           # entrar, crear cuenta, OAuth y terminales de estado
   hall-of-fame.tsx        # podio y tabla del salón
   use-reveal.ts           # aparición de las secciones .reveal al hacer scroll
@@ -271,9 +272,10 @@ components/               # componentes de interfaz
   about/                  # mitades de /acerca y el formulario de contacto
 
 lib/
-  games.ts                # los siete juegos, categorías y getGame() (simulado)
+  games.ts                # los ocho juegos, categorías y getGame() (simulado)
   tetris.ts               # motor de TETRIX: puro, sin DOM ni canvas (SPEC 13)
   asteroids.ts            # motor de ASTEROIDES: puro, sin DOM ni canvas (SPEC 14)
+  arkanoid.ts             # motor de ARKANOID: puro, sin DOM ni canvas (SPEC 15)
   scores.ts               # generador determinista de puntuaciones (simulado)
   supabase/
     client.ts             # cliente de navegador
@@ -472,6 +474,7 @@ npx skills@latest add Klerith/fernando-skills
 | [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)              | Aprobado     | SPEC 11                            |
 | [13 — TETRIX: primer juego con motor real](specs/13-tetrix-motor-jugable.md)                    | Implementado | SPEC 01, SPEC 04                   |
 | [14 — ASTEROIDES: segundo juego con motor real](specs/14-asteroides-motor-jugable.md)           | Implementado | SPEC 01, SPEC 04, SPEC 13          |
+| [15 — ARKANOID: tercer juego con motor real](specs/15-arkanoid-motor-jugable.md)               | Implementado | SPEC 01, SPEC 04, SPEC 13          |
 
 ## Referencias
 
