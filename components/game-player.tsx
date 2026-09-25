@@ -2,10 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import { useSession } from "@/components/session-provider";
-import { TetrisGame, type TetrisRun } from "@/components/tetris-game";
+import { AsteroidsGame } from "@/components/asteroids-game";
+import { TetrisGame } from "@/components/tetris-game";
 import type { Game } from "@/lib/games";
+import { LIVES as ASTEROIDS_LIVES } from "@/lib/asteroids";
 import { LIVES as TETRIX_LIVES } from "@/lib/tetris";
 import { displayName } from "@/lib/supabase/user";
 
@@ -19,13 +27,40 @@ export type RestoredRun = { score: number; level: number };
 const LIVES = 3;
 const TICK_MS = 220;
 
-/** El único juego con motor real: el resto sigue con la escena decorativa. */
-const PLAYABLE_ID = "tetrix";
+/** Los tres números que un motor empuja al HUD. */
+export type EngineRun = { score: number; lives: number; level: number };
 
-type Run = { score: number; lives: number; level: number };
+/**
+ * El contrato de un motor real. No pinta HUD, no tiene pausa propia y no sabe
+ * quién juega: sólo empuja números por `onRun` y avisa del final con `onOver`.
+ */
+export type EngineProps = {
+  paused: boolean;
+  onTogglePause: () => void;
+  onRun: (run: EngineRun) => void;
+  onOver: () => void;
+};
+
+/**
+ * Los juegos con motor real. `lives` es con cuántas vidas arranca el HUD y
+ * `screen` el modificador que se añade a `.crt-screen`. Un id que no esté aquí
+ * sigue con la escena decorativa.
+ */
+const ENGINES: Record<
+  string,
+  { Component: ComponentType<EngineProps>; lives: number; screen: string }
+> = {
+  tetrix: { Component: TetrisGame, lives: TETRIX_LIVES, screen: "tetris" },
+  asteroides: {
+    Component: AsteroidsGame,
+    lives: ASTEROIDS_LIVES,
+    screen: "rocks",
+  },
+};
+
+type Run = EngineRun;
 
 const NEW_RUN: Run = { score: 0, lives: LIVES, level: 1 };
-const NEW_TETRIX_RUN: Run = { score: 0, lives: TETRIX_LIVES, level: 1 };
 
 export function GamePlayer({
   game,
@@ -35,8 +70,10 @@ export function GamePlayer({
   restored?: RestoredRun;
 }) {
   const { user } = useSession();
-  const playable = game.id === PLAYABLE_ID;
-  const initialRun = playable ? NEW_TETRIX_RUN : NEW_RUN;
+  const engine = ENGINES[game.id];
+  const initialRun: Run = engine
+    ? { score: 0, lives: engine.lives, level: 1 }
+    : NEW_RUN;
 
   // /jugar/[id] está detrás del proxy, así que aquí siempre hay sesión: la
   // rama sin usuario sólo existe porque useSession() la admite en el tipo.
@@ -66,7 +103,7 @@ export function GamePlayer({
   };
 
   useEffect(() => {
-    if (playable || over || paused) return;
+    if (engine || over || paused) return;
     const timer = setInterval(() => {
       setRun((prev) => {
         const score = prev.score + Math.floor(10 + Math.random() * 90);
@@ -77,7 +114,7 @@ export function GamePlayer({
       });
     }, TICK_MS);
     return () => clearInterval(timer);
-  }, [playable, over, paused]);
+  }, [engine, over, paused]);
 
   // Con una partida recuperada el motor se monta de cero detrás del modal y su
   // primer aviso (0 puntos) pisaría la puntuación que se acaba de recuperar.
@@ -85,7 +122,7 @@ export function GamePlayer({
   const ignoreRun = useRef(recuperada);
 
   const togglePause = useCallback(() => setPaused((p) => !p), []);
-  const handleRun = useCallback((next: TetrisRun) => {
+  const handleRun = useCallback((next: EngineRun) => {
     if (ignoreRun.current) return;
     setRun(next);
   }, []);
@@ -139,9 +176,9 @@ export function GamePlayer({
       </div>
 
       <div className="crt">
-        <div className={"crt-screen" + (playable ? " tetris" : "")}>
-          {playable ? (
-            <TetrisGame
+        <div className={"crt-screen" + (engine ? " " + engine.screen : "")}>
+          {engine ? (
+            <engine.Component
               key={runKey}
               /* FIN también congela el motor: el bucle no sigue tras el modal. */
               paused={paused || over}

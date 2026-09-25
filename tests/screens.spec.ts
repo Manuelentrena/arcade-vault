@@ -362,6 +362,22 @@ test.describe("biblioteca", () => {
     await expect(page.getByText("NO HAY RESULTADOS")).toBeVisible();
   });
 
+  test("el chip SHOOTER muestra ASTEROIDES con su captura", async ({ page }) => {
+    await page.goto("/biblioteca");
+    await page.getByRole("button", { name: "SHOOTER" }).click();
+    await expect(page.locator(".card .title")).toHaveText([
+      "INVASORES",
+      "ASTEROIDES",
+    ]);
+
+    // Su portada es la captura real, no el dibujo CSS de respaldo.
+    const cover = page
+      .locator(".card", { hasText: "ASTEROIDES" })
+      .locator(".cover-bg");
+    await expect(cover).toHaveClass(/cover-shot/);
+    await expect(cover).toHaveAttribute("src", /asteroides\.png/);
+  });
+
   test("el chip PUZZLE deja un solo juego", async ({ page }) => {
     await page.goto("/biblioteca");
     await page.getByRole("button", { name: "PUZZLE" }).click();
@@ -395,6 +411,10 @@ test.describe("detalle", () => {
     const response = await page.goto("/juego/no-existe");
     expect(response?.status()).toBe(404);
     await expect(page.getByText("PANTALLA NO ENCONTRADA")).toBeVisible();
+
+    // ROCAS pasó a ser ASTEROIDES en la SPEC 14: su id ya no existe.
+    const viejo = await page.goto("/juego/rocas");
+    expect(viejo?.status()).toBe(404);
   });
 });
 
@@ -455,6 +475,9 @@ test.describe("reproductor", () => {
     await signIn(page);
     const response = await page.goto("/jugar/no-existe");
     expect(response?.status()).toBe(404);
+
+    const viejo = await page.goto("/jugar/rocas");
+    expect(viejo?.status()).toBe(404);
   });
 });
 
@@ -593,6 +616,97 @@ test.describe("tetrix", () => {
     await page.keyboard.press("Space");
     await page.waitForTimeout(1000);
     expect(scoreOf(await score.innerText())).toBe(pausado);
+  });
+});
+
+test.describe("asteroides", () => {
+  /**
+   * El segundo juego con motor real. Como en tetrix, aquí no se congela el
+   * reloj: el bucle necesita requestAnimationFrame vivo. El campo se genera al
+   * azar, así que nada de lo que se afirma depende de dónde caiga una roca.
+   */
+  async function openAsteroides(page: Page) {
+    await signIn(page);
+    await page.goto("/jugar/asteroides");
+    await expect(page.locator(".rocks-field")).toBeVisible();
+  }
+
+  test("arranca con el campo, los mandos y la leyenda", async ({ page }) => {
+    await openAsteroides(page);
+
+    await expect(
+      page.getByRole("img", { name: "Campo de ASTEROIDES" }),
+    ).toBeVisible();
+    // La escena decorativa se queda para los cinco juegos sin motor.
+    await expect(page.locator(".game-arena")).toHaveCount(0);
+
+    // El HUD es el común a todos los juegos: una vida, nivel 01, 0 puntos.
+    await expect(page.locator(".hud-stat").nth(1).locator(".v")).toHaveText(
+      "0",
+    );
+    await expect(page.locator(".hud-stat.lives .v")).toHaveText("♥");
+    await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
+
+    // Los cuatro botones están dentro de la pantalla; la pausa no.
+    await expect(page.locator(".crt-screen .rocks-pad .btn")).toHaveCount(3);
+    await expect(page.locator(".crt-screen .pad-fire")).toBeVisible();
+    await expect(page.locator(".rocks-side .l")).toHaveText([
+      "MOVIMIENTO",
+      "DISPARO",
+      "OBJETOS",
+    ]);
+    for (const label of [
+      "Empujar",
+      "Girar a la izquierda",
+      "Girar a la derecha",
+      "Disparar",
+    ]) {
+      await expect(page.getByRole("button", { name: label })).toBeVisible();
+    }
+
+    // La leyenda de objetos, con una entrada por cada uno de los dos.
+    await expect(page.locator(".rocks-legend li")).toHaveCount(2);
+    await expect(page.locator(".rocks-legend .d")).toHaveText([
+      "TRIPLE",
+      "ESCUDO",
+    ]);
+
+    await expect(page.locator(".crt-screen").first()).toHaveClass(/rocks/);
+  });
+
+  test("disparar no desplaza la página", async ({ page }) => {
+    await openAsteroides(page);
+
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    // Mantener la tecla: el disparo es un estado, no un flanco.
+    await page.keyboard.down("Space");
+    await page.waitForTimeout(600);
+    await page.keyboard.up("Space");
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+
+    // Y las flechas tampoco, que son las que mueven la nave.
+    for (const key of ["ArrowLeft", "ArrowRight", "ArrowUp"]) {
+      await page.keyboard.press(key);
+    }
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  });
+
+  test("PAUSA congela la partida", async ({ page }) => {
+    await openAsteroides(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+
+    await page.getByRole("button", { name: "PAUSA" }).click();
+    await expect(page.getByText("EN PAUSA")).toBeVisible();
+
+    // Con el bucle parado la puntuación no se mueve, se dispare o no.
+    const pausado = scoreOf(await score.innerText());
+    await page.keyboard.down("Space");
+    await page.waitForTimeout(1000);
+    await page.keyboard.up("Space");
+    expect(scoreOf(await score.innerText())).toBe(pausado);
+
+    await page.getByRole("button", { name: "REANUDAR" }).click();
+    await expect(page.getByText("EN PAUSA")).toHaveCount(0);
   });
 });
 
