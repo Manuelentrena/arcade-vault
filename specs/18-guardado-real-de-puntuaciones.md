@@ -1,6 +1,6 @@
 # SPEC 18 — Guardado real de puntuaciones en `scores`
 
-**Estado:** Aprovado
+**Estado:** Implementado
 **Depende de:** SPEC 16 (tabla `scores` y su RLS), SPEC 17 (catálogo real, lectura de `scores`), SPEC 07 (invitado anónimo real)
 **Fecha:** 2026-09-27
 **Objetivo:** Hacer que "GUARDAR PUNTUACIÓN" inserte de verdad una fila en `public.scores` al terminar una partida (por fin de juego o por abandono con el botón FIN) solo cuando el resultado supera la mejor marca anterior del jugador en ese juego, en vez de marcar un estado local decorativo o guardar cada intento; que ese guardado sobreviva al viaje completo por `/auth` — incluida la creación de una cuenta nueva con confirmación por correo —; y que las vidas y el tope de nivel de cada motor pasen a leerse de `public.games` en vez de constantes fijas en código.
@@ -94,6 +94,12 @@ revoke execute on function public.save_score(text, integer, integer) from public
 grant execute on function public.save_score(text, integer, integer) to authenticated;
 ```
 
+**Bug encontrado al revisar producción:** este `revoke ... from public` no bastaba. Supabase concede `EXECUTE` a `anon`/`authenticated`/`service_role` por defecto a toda función nueva de `public` (`ALTER DEFAULT PRIVILEGES` a nivel de esquema), y esas concesiones quedan adjuntas por rol en el momento de crear la función — revocar de `public` solo retira el pseudo-rol PUBLIC, no esas concesiones ya hechas. El linter de seguridad de Supabase lo marcó (`anon_security_definer_function_executable`): `save_score` seguía siendo ejecutable por `anon`. No era explotable — `auth.uid()` es `null` para una llamada `anon` de verdad, sin sesión, y `v_is_anonymous is not false` trata ese `null` como "no es false" y rechaza igual que a un invitado —, pero no coincidía con el diseño documentado aquí ("solo se concede a authenticated, nunca a anon"). Segunda migración (`supabase/migrations/<timestamp>_revocar_anon_save_score.sql`):
+
+```sql
+revoke execute on function public.save_score(text, integer, integer) from anon;
+```
+
 No hay cambios de columnas ni de políticas RLS: la policy de insert de la SPEC 16 (`cada cual guarda su propia partida`, `check (auth.uid() = user_id)`) ya cubre lo que la función necesita — la función solo añade la resolución de `slug`, la comparación con la mejor marca anterior y el rechazo explícito de invitados antes de llegar a esa policy. Un empate exacto (`p_score = v_previous_best`) cuenta como "no es récord": la comparación es `<=`, no `<`.
 
 ### Vidas y niveles reales desde `games` (sin migración)
@@ -137,6 +143,7 @@ Las columnas `vidas` y `niveles` ya existen en `public.games` desde la SPEC 16 y
 - [ ] Un invitado que termina partida, pulsa "INICIA SESIÓN PARA GUARDAR" y **crea una cuenta nueva** (alta con email/contraseña) conserva la partida pendiente: el enlace del correo de confirmación vuelve a `/jugar/[id]?puntuacion=&nivel=` y se aplica la misma regla de récord, igual que si hubiera iniciado sesión con una cuenta existente.
 - [ ] Si `save_score` falla, el modal muestra un aviso y el botón permite reintentar; un reintento que sí tenga éxito termina mostrando el copy de nueva marca.
 - [ ] Llamar a `save_score` directamente como usuario anónimo (sin pasar por la UI) lanza una excepción y no inserta nada.
+- [ ] El rol `anon` no tiene `EXECUTE` sobre `save_score` en el proyecto remoto (`get_advisors` de Supabase sin el hallazgo `anon_security_definer_function_executable` para esta función).
 - [ ] El salón (`/salon`) y la ficha de cada juego (`/juego/[id]`) muestran las puntuaciones reales recién guardadas.
 - [ ] Dos filas del mismo jugador en la misma tabla (dos superaciones suyas) no disparan el aviso de React de claves duplicadas.
 - [ ] La fecha de una puntuación se ve como fecha (`27/9/2026`), nunca como el `created_at` ISO completo, ni en `/juego/[id]` ni en `/salon`.
@@ -163,6 +170,7 @@ Las columnas `vidas` y `niveles` ya existen en `public.games` desde la SPEC 16 y
 - **`EngineProps` gana `initialLives`/`maxLevel` compartidos por los tres motores aunque solo TETRIX use `maxLevel`** — mantiene el contrato uniforme que exige `ENGINES: Record<string, { Component: ComponentType<EngineProps>; screen: string }>`; tipar cada motor con props distintas rompería esa uniformidad para ganar muy poco.
 - **Los cuatro bugs de presentación con datos reales se corrigen en esta misma spec**, aunque ninguno estaba en el plan original — decisión explícita del usuario: son consecuencia directa de que `scores` deja de estar vacía por primera vez (SPEC 16/17 nunca los pudieron ver), el mismo criterio ya usado para el bug de `signUp()`.
 - **`formatDate()` vive en `lib/supabase/scores.ts`, no en los componentes** — `ScoreRow.date` llega ya formateado a `leaderboard.tsx` y `hall-of-fame.tsx`; ninguno de los dos necesita saber que el origen es un ISO 8601 de Postgres.
+- **El `revoke ... from anon` de `save_score` va en una segunda migración, no reescribiendo la primera** — la primera ya estaba aplicada en remoto cuando se detectó el hallazgo; el proyecto no permite editar una migración ya aplicada, así que la corrección es aditiva, como cualquier otro cambio de esquema posterior.
 
 ## Riesgos identificados
 
