@@ -112,10 +112,11 @@ export function GamePlayer({
     router.push(`/auth?next=${encodeURIComponent(vuelta)}`);
   };
 
-  // Una partida empezada cuenta como jugada, se termine o no.
+  // Una partida empezada cuenta como jugada, se termine o no. rpc() devuelve
+  // un builder "thenable": sin then/await el fetch nunca sale.
   useEffect(() => {
     const supabase = createClient();
-    supabase.rpc("increment_game_plays", { p_slug: game.id });
+    void supabase.rpc("increment_game_plays", { p_slug: game.id }).then();
   }, [game.id]);
 
   // Con una partida recuperada el motor se monta de cero detrás del modal y su
