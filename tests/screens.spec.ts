@@ -3,8 +3,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 const ROUTES = [
   { name: "home", path: "/" },
   { name: "biblioteca", path: "/biblioteca" },
-  { name: "detalle", path: "/juego/serpentina" },
-  { name: "reproductor", path: "/jugar/serpentina" },
+  { name: "detalle", path: "/juego/tetrix" },
+  { name: "reproductor", path: "/jugar/tetrix" },
   { name: "auth", path: "/auth" },
   { name: "salon", path: "/salon" },
   { name: "acerca", path: "/acerca" },
@@ -95,49 +95,6 @@ async function disarmReveal(page: Page) {
   });
 }
 
-/**
- * El reproductor sube la puntuación con un setInterval. Se congela el reloj tras
- * cargar la página para que la partida sólo avance cuando la prueba lo pide.
- */
-const CLOCK_START = new Date("2026-09-15T12:00:00Z");
-/** Margen amplio: pauseAt sólo avanza hacia adelante y la carga puede tardar. */
-const CLOCK_PAUSE = new Date(CLOCK_START.getTime() + 60_000);
-
-async function openPlayer(page: Page, path = "/jugar/serpentina") {
-  // /jugar/[id] está detrás del proxy. Se entra antes de congelar el reloj:
-  // con el reloj ya parado, el cliente de Supabase vería el token recién
-  // emitido fuera de su ventana de validez.
-  await signIn(page);
-  await page.clock.install({ time: CLOCK_START });
-  await page.goto(path);
-  await page.clock.pauseAt(CLOCK_PAUSE);
-}
-
-/** Debe seguir a TICK_MS en components/game-player.tsx. */
-const TICK_MS = 220;
-
-/**
- * Anula el setInterval de la partida antes de que cargue la página, dejándola
- * en su estado inicial. Congelar el reloj no basta: el intervalo nace cuando
- * React monta, así que el número de ticks depende del tiempo de carga, y con él
- * los dígitos de la puntuación — que al ser el HUD flex-wrap cambian su altura
- * y desplazan toda la página. Se filtra sólo ese intervalo para no tocar los
- * temporizadores de React ni de Next.
- */
-async function freezeRun(page: Page) {
-  await page.addInitScript((tick) => {
-    const real = window.setInterval;
-    window.setInterval = ((
-      handler: TimerHandler,
-      delay?: number,
-      ...args: unknown[]
-    ) =>
-      delay === tick
-        ? 0
-        : real(handler, delay, ...args)) as typeof window.setInterval;
-  }, TICK_MS);
-}
-
 function scoreOf(text: string): number {
   return Number(text.replace(/\D/g, ""));
 }
@@ -226,10 +183,7 @@ async function confirmationLink(page: Page, email: string): Promise<string> {
 test.describe("capturas de referencia", () => {
   for (const route of ROUTES) {
     test(`${route.name} coincide con su captura`, async ({ page }) => {
-      // La partida avanza sola con puntuación aleatoria: se congela para que la
-      // captura no dependa del tiempo de carga.
       if (route.name === "reproductor") {
-        await freezeRun(page);
         // /jugar/[id] está detrás del proxy: sin sesión la captura saldría
         // del formulario de acceso.
         await signIn(page);
@@ -242,6 +196,7 @@ test.describe("capturas de referencia", () => {
 
       if (route.name === "reproductor") {
         // Se captura en pausa, el estado con más interfaz visible.
+        await expect(page.locator(".tetris-board")).toBeVisible();
         await page.getByRole("button", { name: "PAUSA" }).click();
         await expect(
           page.getByRole("button", { name: "REANUDAR" }),
@@ -271,7 +226,7 @@ test.describe("home", () => {
     await page.goto("/");
     await expect(page.locator("h1.home-title")).toContainText("EL ARCADE");
     await expect(page.locator(".feature-card")).toHaveCount(4);
-    await expect(page.locator(".mini-card")).toHaveCount(6);
+    await expect(page.locator(".mini-card")).toHaveCount(3);
     await expect(page.locator(".stat-block")).toHaveCount(3);
     await expect(page.locator(".tick-row")).toHaveCount(7);
     await expect(page.locator(".top-row")).toHaveCount(5);
@@ -340,35 +295,34 @@ test.describe("home sin animación de entrada", () => {
 });
 
 test.describe("biblioteca", () => {
-  test("muestra los 8 juegos", async ({ page }) => {
+  test("muestra los 3 juegos", async ({ page }) => {
     await page.goto("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(8);
-    await expect(page.locator(".cover-bg")).toHaveCount(8);
+    await expect(page.locator(".card")).toHaveCount(3);
+    await expect(page.locator(".cover-bg")).toHaveCount(3);
   });
 
   test("el buscador filtra por nombre", async ({ page }) => {
     await page.goto("/biblioteca");
-    await page.getByLabel("Buscar un juego por nombre").fill("ser");
+    await page.getByLabel("Buscar un juego por nombre").fill("tet");
     await expect(page.locator(".card")).toHaveCount(1);
-    await expect(page.locator(".card .title")).toHaveText("SERPENTINA");
+    await expect(page.locator(".card .title")).toHaveText("TETRIX");
   });
 
   test("una búsqueda sin resultados muestra el estado vacío", async ({
     page,
   }) => {
     await page.goto("/biblioteca");
-    await page.getByLabel("Buscar un juego por nombre").fill("serzzz");
+    await page.getByLabel("Buscar un juego por nombre").fill("tetzzz");
     await expect(page.locator(".card")).toHaveCount(0);
     await expect(page.getByText("NO HAY RESULTADOS")).toBeVisible();
   });
 
-  test("el chip SHOOTER muestra ASTEROIDES con su captura", async ({ page }) => {
+  test("el chip SHOOTER muestra ASTEROIDES con su captura", async ({
+    page,
+  }) => {
     await page.goto("/biblioteca");
     await page.getByRole("button", { name: "SHOOTER" }).click();
-    await expect(page.locator(".card .title")).toHaveText([
-      "INVASORES",
-      "ASTEROIDES",
-    ]);
+    await expect(page.locator(".card .title")).toHaveText(["ASTEROIDES"]);
 
     // Su portada es la captura real, no el dibujo CSS de respaldo.
     const cover = page
@@ -389,22 +343,25 @@ test.describe("biblioteca", () => {
     page,
   }) => {
     await page.goto("/biblioteca");
-    await page.locator(".card", { hasText: "SERPENTINA" }).click();
-    await expect(page).toHaveURL("/juego/serpentina");
+    await page.locator(".card", { hasText: "ASTEROIDES" }).click();
+    await expect(page).toHaveURL("/juego/asteroides");
     await page.goBack();
     await expect(page).toHaveURL("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(8);
+    await expect(page.locator(".card")).toHaveCount(3);
   });
 });
 
 test.describe("detalle", () => {
-  test("muestra la ficha y 10 puntuaciones", async ({ page }) => {
-    await page.goto("/juego/serpentina");
-    await expect(page.locator("h2")).toHaveText("SERPENTINA");
+  test("muestra la ficha y el estado vacío de puntuaciones", async ({
+    page,
+  }) => {
+    await page.goto("/juego/tetrix");
+    await expect(page.locator("h2")).toHaveText("TETRIX");
     await expect(page.locator(".detail-tags span")).toHaveCount(4);
     await expect(page.locator(".stat-strip > div")).toHaveCount(3);
-    await expect(page.locator(".lb-row")).toHaveCount(10);
-    await expect(page.locator(".lb-row").first()).toHaveClass(/top1/);
+    // Nadie ha jugado todavía: sin filas, con el mensaje de estado vacío.
+    await expect(page.locator(".lb-row")).toHaveCount(0);
+    await expect(page.getByText("AÚN NADIE HA JUGADO")).toBeVisible();
   });
 
   test("un id desconocido devuelve 404", async ({ page }) => {
@@ -419,23 +376,20 @@ test.describe("detalle", () => {
 });
 
 test.describe("reproductor", () => {
-  test("la puntuación sube sola y se congela al pausar", async ({ page }) => {
-    await openPlayer(page);
+  /** Un hard drop en TETRIX puntúa al instante: sirve para llegar a FIN con algo. */
+  async function scoreSomething(page: Page) {
+    await page.keyboard.press("Space");
     const score = page.locator(".hud-stat").nth(1).locator(".v");
-    const before = scoreOf(await score.innerText());
-
-    await page.clock.runFor(1100);
-    const running = scoreOf(await score.innerText());
-    expect(running).toBeGreaterThan(before);
-
-    await page.getByRole("button", { name: "PAUSA" }).click();
-    await page.clock.runFor(3000);
-    expect(scoreOf(await score.innerText())).toBe(running);
-  });
+    await expect
+      .poll(async () => scoreOf(await score.innerText()))
+      .toBeGreaterThan(0);
+  }
 
   test("FIN abre el modal y guardar no persiste nada", async ({ page }) => {
-    await openPlayer(page);
-    await page.clock.runFor(1100);
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    await scoreSomething(page);
     await page.getByRole("button", { name: "FIN" }).click();
 
     const modal = page.getByRole("dialog");
@@ -456,13 +410,14 @@ test.describe("reproductor", () => {
   });
 
   test("JUGAR DE NUEVO reinicia la partida", async ({ page }) => {
-    await openPlayer(page);
-    await page.clock.runFor(1100);
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    await scoreSomething(page);
     await page.getByRole("button", { name: "FIN" }).click();
     await page.getByRole("button", { name: "JUGAR DE NUEVO" }).click();
 
     await expect(page.getByRole("dialog")).toBeHidden();
-    // Con el reloj congelado la partida reiniciada no avanza: 0 puntos, nivel 01.
     await expect(page.locator(".hud-stat").nth(1).locator(".v")).toHaveText(
       "0",
     );
@@ -485,9 +440,16 @@ test.describe("fin de partida como invitado", () => {
   test("el modal pide entrar y lleva a /auth con la puntuación", async ({
     page,
   }) => {
-    await playAsGuest(page, "/jugar/serpentina");
-    await freezeRun(page);
-    await page.goto("/jugar/serpentina");
+    await playAsGuest(page, "/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    await page.keyboard.press("Space");
+    await expect
+      .poll(async () =>
+        scoreOf(
+          await page.locator(".hud-stat").nth(1).locator(".v").innerText(),
+        ),
+      )
+      .toBeGreaterThan(0);
 
     await page.getByRole("button", { name: "FIN" }).click();
     const modal = page.getByRole("dialog");
@@ -507,17 +469,16 @@ test.describe("fin de partida como invitado", () => {
 
     // La partida viaja en el `next` para volver a la misma pantalla con ella.
     await expect(page).toHaveURL(
-      /\/auth\?next=%2Fjugar%2Fserpentina%3Fpuntuacion%3D\d+%26nivel%3D\d+/,
+      /\/auth\?next=%2Fjugar%2Ftetrix%3Fpuntuacion%3D\d+%26nivel%3D\d+/,
       { timeout: NAV_TIMEOUT },
     );
   });
 
   test("al volver con sesión la partida aparece guardada", async ({ page }) => {
-    await freezeRun(page);
     // Con sesión de verdad: el helper signIn() no codifica `next`, así que la
     // vuelta se reproduce navegando directamente a la URL que /auth entrega.
     await signIn(page);
-    await page.goto("/jugar/serpentina?puntuacion=42000&nivel=3");
+    await page.goto("/jugar/tetrix?puntuacion=42000&nivel=3");
 
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible();
@@ -637,8 +598,6 @@ test.describe("asteroides", () => {
     await expect(
       page.getByRole("img", { name: "Campo de ASTEROIDES" }),
     ).toBeVisible();
-    // La escena decorativa se queda para los cinco juegos sin motor.
-    await expect(page.locator(".game-arena")).toHaveCount(0);
 
     // El HUD es el común a todos los juegos: una vida, nivel 01, 0 puntos.
     await expect(page.locator(".hud-stat").nth(1).locator(".v")).toHaveText(
@@ -783,23 +742,31 @@ test.describe("arkanoid", () => {
     await expect(page.getByText("EN PAUSA")).toHaveCount(0);
   });
 
-  test("el HUD es el mismo que el de un juego decorativo", async ({ page }) => {
+  test("el HUD es el mismo que el de los otros juegos", async ({ page }) => {
     await signIn(page);
 
     await page.goto("/jugar/arkanoid");
     await expect(page.locator(".ark-board")).toBeVisible();
-    const conMotor = await page.locator(".player-hud .hud-stat .l").allInnerTexts();
-    const botonesMotor = await page.locator(".hud-actions .btn").allInnerTexts();
+    const arkanoid = await page
+      .locator(".player-hud .hud-stat .l")
+      .allInnerTexts();
+    const botonesArkanoid = await page
+      .locator(".hud-actions .btn")
+      .allInnerTexts();
 
-    await page.goto("/jugar/serpentina");
-    await expect(page.locator(".game-arena")).toBeVisible();
-    const decorativo = await page.locator(".player-hud .hud-stat .l").allInnerTexts();
-    const botonesDecorativo = await page.locator(".hud-actions .btn").allInnerTexts();
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    const tetrix = await page
+      .locator(".player-hud .hud-stat .l")
+      .allInnerTexts();
+    const botonesTetrix = await page
+      .locator(".hud-actions .btn")
+      .allInnerTexts();
 
-    expect(conMotor).toEqual(decorativo);
-    expect(conMotor).toHaveLength(4);
-    expect(botonesMotor).toEqual(botonesDecorativo);
-    expect(botonesMotor).toHaveLength(3);
+    expect(arkanoid).toEqual(tetrix);
+    expect(arkanoid).toHaveLength(4);
+    expect(botonesArkanoid).toEqual(botonesTetrix);
+    expect(botonesArkanoid).toHaveLength(3);
   });
 });
 
@@ -927,14 +894,14 @@ test.describe("auth", () => {
   test("el invitado entra en /jugar sin pasar por el formulario", async ({
     page,
   }) => {
-    await page.goto("/jugar/serpentina");
-    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fserpentina");
+    await page.goto("/jugar/tetrix");
+    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Ftetrix");
 
     await authReady(page);
     await page.getByRole("button", { name: "JUGAR COMO INVITADO" }).click();
 
     // Vuelve al juego que pidió, no a la biblioteca.
-    await expect(page).toHaveURL("/jugar/serpentina", {
+    await expect(page).toHaveURL("/jugar/tetrix", {
       timeout: NAV_TIMEOUT,
     });
     await expect(page.locator(".auth-btn").first()).toHaveText("INVITADO ▾");
@@ -964,15 +931,15 @@ test.describe("auth", () => {
   test("/jugar sin sesión manda a /auth y vuelve al juego al entrar", async ({
     page,
   }) => {
-    await page.goto("/jugar/serpentina");
-    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Fserpentina");
+    await page.goto("/jugar/tetrix");
+    await expect(page).toHaveURL("/auth?next=%2Fjugar%2Ftetrix");
 
     await authReady(page);
     await page.getByLabel("Correo electrónico").fill(SEED_EMAIL);
     await page.getByLabel("Contraseña").fill(SEED_PASSWORD);
     await page.getByRole("button", { name: "ENTRAR AL VAULT" }).click();
 
-    await expect(page).toHaveURL("/jugar/serpentina", {
+    await expect(page).toHaveURL("/jugar/tetrix", {
       timeout: NAV_TIMEOUT,
     });
   });
@@ -1019,22 +986,24 @@ test.describe("registro por correo", () => {
 });
 
 test.describe("salón de la fama", () => {
-  test("muestra podio, tabla y chips", async ({ page }) => {
+  test("muestra los chips y el estado vacío", async ({ page }) => {
     await page.goto("/salon");
-    await expect(page.locator(".podium-slot")).toHaveCount(3);
-    await expect(page.locator(".hall-tabs .chip")).toHaveCount(8);
-    await expect(page.locator(".hall-table .tr")).toHaveCount(12);
-    await expect(page.locator(".podium-slot.gold .rank-num")).toHaveText("01");
+    // Nadie ha jugado todavía: sin podio, con el mensaje de estado vacío.
+    await expect(page.locator(".podium-slot")).toHaveCount(0);
+    await expect(page.locator(".hall-tabs .chip")).toHaveCount(3);
+    await expect(page.getByText("AÚN NADIE HA JUGADO")).toBeVisible();
   });
 
-  test("cambiar de juego recalcula la tabla", async ({ page }) => {
+  test("cambiar de juego cambia la pestaña activa", async ({ page }) => {
     await page.goto("/salon");
-    const champion = page.locator(".podium-slot.gold .name");
-    const first = await champion.innerText();
-
-    await page.getByRole("button", { name: "SERPENTINA" }).click();
-    await expect(champion).not.toHaveText(first);
-    await expect(page.locator(".hall-table .tr")).toHaveCount(12);
+    await page.getByRole("button", { name: "ASTEROIDES" }).click();
+    await expect(
+      page.getByRole("button", { name: "ASTEROIDES" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "TETRIX" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 
   test("con sesión aparece TU MEJOR MARCA", async ({ page }) => {
@@ -1044,8 +1013,8 @@ test.describe("salón de la fama", () => {
     await expect(page.locator(".tr.you-label")).toContainText(
       "TU MEJOR MARCA EN",
     );
-    await expect(page.locator(".tr.you .pl")).toHaveText("PX_KAI");
-    await expect(page.locator(".hall-table .tr")).toHaveCount(14);
+    // PX_KAI no tiene ninguna puntuación real todavía.
+    await expect(page.locator(".tr.you")).toContainText("AÚN NO HAS JUGADO");
   });
 });
 

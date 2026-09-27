@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef } from "react";
-import type { Game } from "@/lib/games";
+import type { Game } from "@/lib/supabase/games";
 
 function btnColor(color: Game["color"]): string {
   if (color === "magenta") return "btn magenta";
@@ -58,7 +58,9 @@ export function GameCard({ game }: { game: Game }) {
         <div className="row">
           <div className="score-badge">
             <span>MEJOR PUNTUACIÓN</span>
-            <b>{game.best.toLocaleString("es-ES")}</b>
+            <b>
+              {game.best === null ? "—" : game.best.toLocaleString("es-ES")}
+            </b>
           </div>
           {/* Decorativo: la tarjeta entera ya es el enlace al detalle. */}
           <span className={btnColor(game.color)}>JUGAR</span>

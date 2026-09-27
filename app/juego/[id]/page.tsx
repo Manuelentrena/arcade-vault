@@ -2,15 +2,31 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Leaderboard } from "@/components/leaderboard";
-import { getGame } from "@/lib/games";
-import { detailSeed, seededScores } from "@/lib/scores";
+import { getGameBySlug } from "@/lib/supabase/games";
+import { getLeaderboard } from "@/lib/supabase/scores";
+
+function stars(dificultad: number): string {
+  return Array.from({ length: 5 }, (_, i) => (i < dificultad ? "★" : "☆")).join(
+    " ",
+  );
+}
+
+function jugadoresLabel(jugadores: number): string {
+  return jugadores === 1 ? "1 JUGADOR" : `${jugadores} JUGADORES`;
+}
+
+function perifericosLabel(perifericos: string[]): string {
+  const labels: Record<string, string> = { teclado: "TECLADO", raton: "RATÓN" };
+  const nombres = perifericos.map((p) => labels[p]);
+  return nombres.length === 1 ? `SOLO ${nombres[0]}` : nombres.join(" / ");
+}
 
 export default async function GameDetailPage(props: PageProps<"/juego/[id]">) {
   const { id } = await props.params;
-  const game = getGame(id);
+  const game = await getGameBySlug(id);
   if (!game) notFound();
 
-  const scores = seededScores(detailSeed(id), 10);
+  const scores = await getLeaderboard(id, 10);
 
   return (
     <div className="av-detail fade-in">
@@ -33,8 +49,8 @@ export default async function GameDetailPage(props: PageProps<"/juego/[id]">) {
         <div style={{ marginTop: 20 }} className="detail-info">
           <div className="detail-tags">
             <span>{game.cat}</span>
-            <span>1 JUGADOR</span>
-            <span>TECLADO / TÁCTIL</span>
+            <span>{jugadoresLabel(game.jugadores)}</span>
+            <span>{perifericosLabel(game.perifericos)}</span>
             <span>RETRO 1985</span>
           </div>
           <h2 className="neon-cyan">{game.title}</h2>
@@ -53,7 +69,7 @@ export default async function GameDetailPage(props: PageProps<"/juego/[id]">) {
                   textShadow: "0 0 6px rgba(255,0,110,0.5)",
                 }}
               >
-                {game.best.toLocaleString("es-ES")}
+                {game.best === null ? "—" : game.best.toLocaleString("es-ES")}
               </div>
             </div>
             <div>
@@ -65,7 +81,7 @@ export default async function GameDetailPage(props: PageProps<"/juego/[id]">) {
                   textShadow: "0 0 6px rgba(245,255,0,0.5)",
                 }}
               >
-                ★ ★ ★ ☆ ☆
+                {stars(game.dificultad)}
               </div>
             </div>
           </div>

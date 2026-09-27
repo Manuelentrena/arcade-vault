@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MiniCard } from "@/components/home/mini-card";
-import type { Game } from "@/lib/games";
+import type { Game } from "@/lib/supabase/games";
 
 export function HomeGames({ games }: { games: Game[] }) {
   return (

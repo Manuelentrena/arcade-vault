@@ -34,32 +34,85 @@ export type Database = {
   };
   public: {
     Tables: {
+      categorias: {
+        Row: {
+          id: string;
+          nombre: string;
+        };
+        Insert: {
+          id?: string;
+          nombre: string;
+        };
+        Update: {
+          id?: string;
+          nombre?: string;
+        };
+        Relationships: [];
+      };
       games: {
         Row: {
+          categoria_id: string;
+          color: string;
+          cover: string | null;
           created_at: string;
+          dificultad: number;
           id: string;
+          image: string | null;
+          jugadores: number;
+          long: string;
           niveles: number | null;
           nombre: string;
+          perifericos: string[];
+          plays: number;
+          short: string;
           slug: string;
           vidas: number;
         };
         Insert: {
+          categoria_id: string;
+          color: string;
+          cover?: string | null;
           created_at?: string;
+          dificultad: number;
           id?: string;
+          image?: string | null;
+          jugadores: number;
+          long: string;
           niveles?: number | null;
           nombre: string;
+          perifericos: string[];
+          plays?: number;
+          short: string;
           slug: string;
           vidas: number;
         };
         Update: {
+          categoria_id?: string;
+          color?: string;
+          cover?: string | null;
           created_at?: string;
+          dificultad?: number;
           id?: string;
+          image?: string | null;
+          jugadores?: number;
+          long?: string;
           niveles?: number | null;
           nombre?: string;
+          perifericos?: string[];
+          plays?: number;
+          short?: string;
           slug?: string;
           vidas?: number;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "games_categoria_id_fkey";
+            columns: ["categoria_id"];
+            isOneToOne: false;
+            referencedRelation: "categorias";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       guest_cleanup_runs: {
         Row: {
@@ -153,6 +206,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      increment_game_plays: { Args: { p_slug: string }; Returns: undefined };
       purge_guests_tick: {
         Args: Record<PropertyKey, never>;
         Returns: undefined;

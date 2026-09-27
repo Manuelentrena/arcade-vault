@@ -5,14 +5,16 @@ import { HomeGames } from "@/components/home/home-games";
 import { HomeHero } from "@/components/home/home-hero";
 import { HomePricing } from "@/components/home/home-pricing";
 import { HomeStats } from "@/components/home/home-stats";
-import { GAMES } from "@/lib/games";
+import { getGames } from "@/lib/supabase/games";
 
-export default function Home() {
+export default async function Home() {
+  const games = await getGames();
+
   return (
     <div className="home fade-in">
       <HomeHero />
       <HomeFeatures />
-      <HomeGames games={GAMES.slice(0, 6)} />
+      <HomeGames games={games} />
       <HomeStats />
       <HomeActivity />
       <HomePricing />

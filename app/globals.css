@@ -948,79 +948,6 @@
   image-rendering: pixelated;
 }
 
-.cover-snake {
-  background: linear-gradient(135deg, #003a2a, #0a0a18);
-}
-.cover-snake::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(circle at 70% 50%, var(--magenta) 0 6px, transparent 7px),
-    linear-gradient(90deg, var(--green) 0 40px, transparent 40px) 20% 50% /
-      200px 12px no-repeat,
-    linear-gradient(90deg, var(--green) 0 12px, transparent 12px)
-      calc(20% + 40px) calc(50% - 12px) / 12px 12px no-repeat,
-    linear-gradient(90deg, var(--green) 0 12px, transparent 12px)
-      calc(20% + 28px) calc(50% - 12px) / 12px 12px no-repeat;
-  filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.6));
-}
-
-.cover-glot {
-  background: radial-gradient(circle at 50% 50%, #1a002a, #0a0a18);
-}
-.cover-glot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 30% 50%, var(--yellow) 0 38px, transparent 39px),
-    radial-gradient(circle at 30% 50%, transparent 0 0, transparent 28px),
-    radial-gradient(circle at 70% 50%, var(--magenta) 0 6px, transparent 7px),
-    radial-gradient(circle at 82% 50%, var(--cyan) 0 6px, transparent 7px);
-  clip-path: polygon(
-    0 0,
-    30% 0,
-    30% 50%,
-    100% 30%,
-    100% 70%,
-    30% 50%,
-    30% 100%,
-    0 100%
-  );
-  filter: drop-shadow(0 0 8px rgba(245, 255, 0, 0.5));
-}
-.cover-glot::before {
-  content: "•••";
-  position: absolute;
-  left: 55%;
-  top: 47%;
-  color: var(--cyan);
-  letter-spacing: 6px;
-  font-size: 18px;
-  text-shadow: 0 0 6px var(--cyan);
-}
-
-.cover-invaders {
-  background: linear-gradient(180deg, #001a3a, #0a0a18);
-}
-.cover-invaders::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 20% 30%, var(--green) 0 5px, transparent 6px),
-    radial-gradient(circle at 40% 30%, var(--green) 0 5px, transparent 6px),
-    radial-gradient(circle at 60% 30%, var(--green) 0 5px, transparent 6px),
-    radial-gradient(circle at 80% 30%, var(--green) 0 5px, transparent 6px),
-    radial-gradient(circle at 20% 50%, var(--magenta) 0 5px, transparent 6px),
-    radial-gradient(circle at 40% 50%, var(--magenta) 0 5px, transparent 6px),
-    radial-gradient(circle at 60% 50%, var(--magenta) 0 5px, transparent 6px),
-    radial-gradient(circle at 80% 50%, var(--magenta) 0 5px, transparent 6px),
-    radial-gradient(circle at 50% 80%, var(--cyan) 0 8px, transparent 9px);
-  filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.6));
-}
-
 .cover-rocas {
   background: radial-gradient(circle at 50% 50%, #0a0a30, #000);
 }
@@ -1044,39 +971,6 @@
   color: var(--yellow);
   font-size: 22px;
   text-shadow: 0 0 8px var(--yellow);
-}
-
-.cover-rana {
-  background: linear-gradient(180deg, #001f2a, #0a0a18);
-}
-.cover-rana::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    repeating-linear-gradient(
-      0deg,
-      rgba(0, 245, 255, 0.18) 0 20px,
-      transparent 20px 40px
-    ),
-    radial-gradient(circle at 50% 55%, var(--green) 0 14px, transparent 15px);
-  filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.5));
-}
-
-.cover-duelo {
-  background: #0a0a18;
-}
-.cover-duelo::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    repeating-linear-gradient(0deg, var(--ink) 0 10px, transparent 10px 20px)
-      50% 0/2px 100% no-repeat,
-    linear-gradient(var(--cyan), var(--cyan)) 6% 35%/6px 30% no-repeat,
-    linear-gradient(var(--magenta), var(--magenta)) 88% 35%/6px 30% no-repeat,
-    radial-gradient(circle at 60% 60%, var(--yellow) 0 5px, transparent 6px);
-  filter: drop-shadow(0 0 6px rgba(0, 245, 255, 0.4));
 }
 
 /* ===== detail screen ===== */
@@ -1355,80 +1249,9 @@
   box-shadow: 0 0 6px var(--green);
 }
 
-/* fake in-screen game */
-.game-arena {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
-}
-.game-arena .grid-floor {
-  position: absolute;
-  inset: 50% 0 0 0;
-  background:
-    linear-gradient(to right, rgba(0, 245, 255, 0.4) 1px, transparent 1px) 0
-      0/40px 40px,
-    linear-gradient(to bottom, rgba(0, 245, 255, 0.4) 1px, transparent 1px) 0
-      0/40px 40px;
-  transform: perspective(300px) rotateX(70deg);
-  transform-origin: top;
-  animation: gridscroll 4s linear infinite;
-  opacity: 0.7;
-}
-.game-arena .player-ship {
-  position: absolute;
-  bottom: 14%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-left: 14px solid transparent;
-  border-right: 14px solid transparent;
-  border-bottom: 22px solid var(--cyan);
-  filter: drop-shadow(0 0 8px var(--cyan));
-  transform: translateX(-50%);
-  animation: bob 2s ease-in-out infinite;
-}
-@keyframes bob {
-  50% {
-    transform: translateX(-50%) translateY(-6px);
-  }
-}
-.game-arena .enemy {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  background: var(--magenta);
-  box-shadow: 0 0 8px var(--magenta);
-}
-.game-arena .e1 {
-  top: 18%;
-  left: 22%;
-  animation: drift 3s ease-in-out infinite;
-}
-.game-arena .e2 {
-  top: 26%;
-  left: 70%;
-  animation: drift 3.2s ease-in-out infinite reverse;
-}
-.game-arena .e3 {
-  top: 14%;
-  left: 50%;
-  background: var(--yellow);
-  box-shadow: 0 0 8px var(--yellow);
-  animation: drift 2.8s ease-in-out infinite;
-}
-@keyframes drift {
-  50% {
-    transform: translate(20px, 10px);
-  }
-}
-
 /* ===== TETRIX — escenario REAL dentro del CRT (SPEC 13) =====
-   A diferencia de .game-arena, esto no es decoración: aquí se juega. El tablero
-   es un <canvas> a la izquierda y la columna derecha lleva la pieza siguiente y
-   la cruceta. La pausa no vive aquí: es el botón del HUD. */
+   El tablero es un <canvas> a la izquierda y la columna derecha lleva la
+   pieza siguiente y la cruceta. La pausa no vive aquí: es el botón del HUD. */
 .tetris-stage {
   position: absolute;
   inset: 0;
@@ -3350,9 +3173,6 @@
   .spinner,
   .fade-in,
   .slide-in,
-  .game-arena .grid-floor,
-  .game-arena .player-ship,
-  .game-arena .enemy,
   .hall-table .tr,
   .home-silos .silo,
   .hero-scroll .arrow,
