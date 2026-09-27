@@ -6,11 +6,10 @@ Plataforma web para jugar a clásicos arcade y competir por la mayor puntuación
 
 El repo contiene una **maqueta navegable completa**: siete pantallas reales sobre Next.js App Router, con navegación, filtros, formulario de sesión y tablas de puntuaciones funcionando de extremo a extremo. Lo que todavía **no** existe:
 
-- **Cinco de los ocho juegos son decorativos.** Las excepciones son tres. `TETRIX` (SPEC 13): tablero de 10 × 20 dentro de la pantalla CRT, siete tetrominós, rotación con _wall kicks_, pieza fantasma, vista de la siguiente, soft y hard drop, una vida y diez niveles. `ASTEROIDES` (SPEC 14): nave con inercia en un mundo que envuelve por los bordes, rocas que se parten en dos a cada impacto, oleadas que crecen hasta diez rocas, dos objetos —disparo triple y escudo— y una vida. Y `ARKANOID` (SPEC 15): bola que rebota entre tres paredes, pala que apunta según dónde golpee, muro distinto en cada nivel —los cinco de la referencia y, del sexto en adelante, generados de forma determinista—, bola cada vez más rápida hasta un tope y tres vidas. En los otros cinco el reproductor (`/jugar/[id]`) sigue animando una escena CRT y subiendo la puntuación sola con un temporizador; no se juega nada.
-- **Las puntuaciones de los tres juegos reales tampoco se guardan.** El motor calcula una puntuación real durante la partida, pero `GUARDAR PUNTUACIÓN` del modal sigue siendo decorativo: no hay tabla ni petición. A un invitado el modal le pide entrar con Google, GitHub o correo antes de guardar, y al volver de `/auth` recupera su puntuación — que viaja en la URL (`?puntuacion=&nivel=`) y tampoco se escribe en ningún sitio.
-- **Los datos del catálogo siguen siendo estáticos.** Los ocho juegos viven en `lib/games.ts`. En base de datos sólo está lo que sostiene la sesión: `public.profiles`, el esquema `auth` de Supabase y la purga diaria de invitados.
+- **El catálogo son tres juegos, los tres reales.** Las cinco entradas decorativas se borraron en la SPEC 17: hoy sólo existen `TETRIX` (SPEC 13): tablero de 10 × 20 dentro de la pantalla CRT, siete tetrominós, rotación con _wall kicks_, pieza fantasma, vista de la siguiente, soft y hard drop, una vida y diez niveles. `ASTEROIDES` (SPEC 14): nave con inercia en un mundo que envuelve por los bordes, rocas que se parten en dos a cada impacto, oleadas que crecen hasta diez rocas, dos objetos —disparo triple y escudo— y una vida. Y `ARKANOID` (SPEC 15): bola que rebota entre tres paredes, pala que apunta según dónde golpee, muro distinto en cada nivel —los cinco de la referencia y, del sexto en adelante, generados de forma determinista—, bola cada vez más rápida hasta un tope y tres vidas.
+- **El catálogo y las puntuaciones se leen de Supabase (SPEC 16, SPEC 17), no de arrays estáticos.** `public.games` (con `public.categorias`) sostiene la ficha de cada juego —nombre, niveles, vidas, dificultad, nº de jugadores, periféricos y un contador `plays` real que sube cada vez que alguien empieza una partida—; `public.scores` sostiene el historial de puntuaciones, hoy vacío porque nadie ha guardado ninguna todavía. `lib/games.ts` y `lib/scores.ts` ya no existen: la lectura vive en `lib/supabase/games.ts` y `lib/supabase/scores.ts`.
+- **El motor calcula una puntuación real, pero guardarla sigue siendo decorativo.** `GUARDAR PUNTUACIÓN` del modal no escribe en `scores`: falta la ruta de guardado, que es una spec aparte. A un invitado el modal le pide entrar con Google, GitHub o correo antes de guardar, y al volver de `/auth` recupera su puntuación — que viaja en la URL (`?puntuacion=&nivel=`) y tampoco se escribe en ningún sitio.
 - **La sesión ya es real.** `/auth` habla con Supabase Auth: correo y contraseña con confirmación por correo, y OAuth de Google y GitHub si están dados de alta. La sesión vive en cookies, no en `localStorage`, y `/jugar/[id]` exige estar dentro.
-- **Las puntuaciones no se guardan.** Las genera un LCG determinista (`seededScores()` en `lib/scores.ts`) a partir del `id` del juego, así que son siempre las mismas y nadie las escribe.
 - **No hay página de cuenta de usuario ni internacionalización.** La interfaz es solo español y solo tema oscuro.
 
 ## Requisitos
@@ -218,17 +217,17 @@ Vive en `supabase/templates/confirmation.html` y `supabase/config.toml` la enlaz
 
 ## Pantallas
 
-| Ruta          | Fichero                   | Qué muestra                                                                                                                               |
-| ------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`           | `app/page.tsx`            | Portada: hero, por qué Arcade Vault, avance de seis juegos, cifras, actividad en vivo, precios y llamada final.                           |
-| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los ocho juegos.                                                             |
-| `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe.         |
+| Ruta          | Fichero                   | Qué muestra                                                                                                                                                                                                                                             |
+| ------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`           | `app/page.tsx`            | Portada: hero, por qué Arcade Vault, avance de seis juegos, cifras, actividad en vivo, precios y llamada final.                                                                                                                                         |
+| `/biblioteca` | `app/biblioteca/page.tsx` | Biblioteca: hero, buscador, chips de categoría y rejilla con los tres juegos, leídos de Supabase.                                                                                                                                                       |
+| `/juego/[id]` | `app/juego/[id]/page.tsx` | Detalle: portada grande, etiquetas, descripción, estadísticas y las diez mejores puntuaciones. `notFound()` si el `id` no existe.                                                                                                                       |
 | `/jugar/[id]` | `app/jugar/[id]/page.tsx` | Reproductor: HUD con puntuación, vidas y nivel, pausa, `FIN` y modal de fin. El registro `ENGINES` decide qué monta dentro: `TETRIX`, `ASTEROIDES` y `ARKANOID` llevan motor real; el resto, una escena CRT animada. `notFound()` si el `id` no existe. |
-| `/auth`       | `app/auth/page.tsx`       | Entrar, crear cuenta o jugar como invitado contra Supabase Auth. Aterriza en `?next=` o, si no lo hay, en la biblioteca.                  |
-| `/salon`      | `app/salon/page.tsx`      | Salón de la Fama: podio, tabla de puntuaciones y selector de juego.                                                                       |
-| `/acerca`     | `app/acerca/page.tsx`     | Acerca de: misión, destacados y formulario de contacto que envía por Resend.                                                              |
-| —             | `app/not-found.tsx`       | Pantalla 404 con el tema arcade.                                                                                                          |
-| —             | `app/error.tsx`           | Límite de error de React con botón de reintento.                                                                                          |
+| `/auth`       | `app/auth/page.tsx`       | Entrar, crear cuenta o jugar como invitado contra Supabase Auth. Aterriza en `?next=` o, si no lo hay, en la biblioteca.                                                                                                                                |
+| `/salon`      | `app/salon/page.tsx`      | Salón de la Fama: podio, tabla de puntuaciones y selector de juego.                                                                                                                                                                                     |
+| `/acerca`     | `app/acerca/page.tsx`     | Acerca de: misión, destacados y formulario de contacto que envía por Resend.                                                                                                                                                                            |
+| —             | `app/not-found.tsx`       | Pantalla 404 con el tema arcade.                                                                                                                                                                                                                        |
+| —             | `app/error.tsx`           | Límite de error de React con botón de reintento.                                                                                                                                                                                                        |
 
 Las URL están en español a propósito y coinciden con la maqueta original.
 
@@ -272,20 +271,20 @@ components/               # componentes de interfaz
   about/                  # mitades de /acerca y el formulario de contacto
 
 lib/
-  games.ts                # los ocho juegos, categorías y getGame() (simulado)
   tetris.ts               # motor de TETRIX: puro, sin DOM ni canvas (SPEC 13)
   asteroids.ts            # motor de ASTEROIDES: puro, sin DOM ni canvas (SPEC 14)
   arkanoid.ts             # motor de ARKANOID: puro, sin DOM ni canvas (SPEC 15)
-  scores.ts               # generador determinista de puntuaciones (simulado)
   supabase/
     client.ts             # cliente de navegador
     server.ts             # cliente de servidor sobre cookies()
     session.ts            # SessionUser y getServerSession()
+    games.ts              # tipos + getGames()/getGameBySlug()/getCategorias() (SPEC 16, 17)
+    scores.ts             # tipo ScoreRow + getLeaderboard()/getBestScores()/getUserBestScore() (SPEC 16, 17)
     types.ts              # tipos generados del esquema; se regeneran al cambiarlo
 
 supabase/                 # stack local y esquema
   config.toml             # configuración del stack de Docker
-  migrations/             # profiles, trigger de alta, RLS y la purga de invitados
+  migrations/             # profiles, trigger de alta, RLS, purga de invitados, catálogo y puntuaciones
   functions/
     borrar-invitados/     # Edge Function que borra invitados por el Admin API
   seed.sql                # usuario de pruebas PX_KAI, confirmado
@@ -458,23 +457,25 @@ npx skills@latest add Klerith/fernando-skills
 
 ### Specs
 
-| Spec                                                                                            | Estado       | Depende de                         |
-| ----------------------------------------------------------------------------------------------- | ------------ | ---------------------------------- |
-| [01 — MVP visual de las pantallas](specs/01-mvp-pantallas-visuales.md)                          | Implementado | —                                  |
-| [02 — Barra móvil: sesión en la hamburguesa](specs/02-nav-movil-sesion-en-hamburguesa.md)       | Implementado | SPEC 01                            |
-| [03 — Documentación del repo](specs/03-documentacion-readme-y-claude.md)                        | Implementado | SPEC 01, SPEC 02                   |
-| [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md) | Implementado | SPEC 01, SPEC 02, SPEC 03          |
-| [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md)                  | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04 |
-| [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md)                          | Implementado | SPEC 01–05                         |
-| [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md)                     | Implementado | SPEC 06                            |
-| [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)              | Implementado | SPEC 07                            |
-| [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)               | Implementado | SPEC 07                            |
-| [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)  | Implementado | SPEC 09                            |
-| [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                  | Aprobado     | SPEC 09                            |
-| [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)              | Aprobado     | SPEC 11                            |
-| [13 — TETRIX: primer juego con motor real](specs/13-tetrix-motor-jugable.md)                    | Implementado | SPEC 01, SPEC 04                   |
-| [14 — ASTEROIDES: segundo juego con motor real](specs/14-asteroides-motor-jugable.md)           | Implementado | SPEC 01, SPEC 04, SPEC 13          |
-| [15 — ARKANOID: tercer juego con motor real](specs/15-arkanoid-motor-jugable.md)               | Implementado | SPEC 01, SPEC 04, SPEC 13          |
+| Spec                                                                                                               | Estado       | Depende de                                  |
+| ------------------------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------- |
+| [01 — MVP visual de las pantallas](specs/01-mvp-pantallas-visuales.md)                                             | Implementado | —                                           |
+| [02 — Barra móvil: sesión en la hamburguesa](specs/02-nav-movil-sesion-en-hamburguesa.md)                          | Implementado | SPEC 01                                     |
+| [03 — Documentación del repo](specs/03-documentacion-readme-y-claude.md)                                           | Implementado | SPEC 01, SPEC 02                            |
+| [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md)                    | Implementado | SPEC 01, SPEC 02, SPEC 03                   |
+| [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md)                                     | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04          |
+| [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md)                                             | Implementado | SPEC 01–05                                  |
+| [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md)                                        | Implementado | SPEC 06                                     |
+| [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)                                 | Implementado | SPEC 07                                     |
+| [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)                                  | Implementado | SPEC 07                                     |
+| [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)                     | Implementado | SPEC 09                                     |
+| [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                                     | Aprobado     | SPEC 09                                     |
+| [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)                                 | Aprobado     | SPEC 11                                     |
+| [13 — TETRIX: primer juego con motor real](specs/13-tetrix-motor-jugable.md)                                       | Implementado | SPEC 01, SPEC 04                            |
+| [14 — ASTEROIDES: segundo juego con motor real](specs/14-asteroides-motor-jugable.md)                              | Implementado | SPEC 01, SPEC 04, SPEC 13                   |
+| [15 — ARKANOID: tercer juego con motor real](specs/15-arkanoid-motor-jugable.md)                                   | Implementado | SPEC 01, SPEC 04, SPEC 13                   |
+| [16 — Tablas Supabase para juegos y puntuaciones](specs/16-tablas-supabase-juegos-y-puntuaciones.md)               | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15          |
+| [17 — Catálogo real desde Supabase y limpieza de decorativos](specs/17-catalogo-real-y-limpieza-de-decorativos.md) | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15, SPEC 16 |
 
 ## Referencias
 
