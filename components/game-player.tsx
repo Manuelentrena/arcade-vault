@@ -13,11 +13,12 @@ import { useSession } from "@/components/session-provider";
 import { ArkanoidGame } from "@/components/arkanoid-game";
 import { AsteroidsGame } from "@/components/asteroids-game";
 import { TetrisGame } from "@/components/tetris-game";
-import type { Game } from "@/lib/games";
+import type { Game } from "@/lib/supabase/games";
 import { LIVES as ARKANOID_LIVES } from "@/lib/arkanoid";
 import { LIVES as ASTEROIDS_LIVES } from "@/lib/asteroids";
 import { LIVES as TETRIX_LIVES } from "@/lib/tetris";
 import { displayName } from "@/lib/supabase/user";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * Partida recuperada al volver de /auth. Viaja en la URL (`?puntuacion=`) y la
@@ -25,9 +26,6 @@ import { displayName } from "@/lib/supabase/user";
  * que la rescate después de hidratar. Nada de esto se persiste.
  */
 export type RestoredRun = { score: number; level: number };
-
-const LIVES = 3;
-const TICK_MS = 220;
 
 /** Los tres números que un motor empuja al HUD. */
 export type EngineRun = { score: number; lives: number; level: number };
@@ -44,10 +42,9 @@ export type EngineProps = {
 };
 
 /**
- * Los juegos con motor real. `lives` es con cuántas vidas arranca el HUD y
- * `screen` el modificador que se añade a `.crt-screen` —vacío cuando el motor
- * ya encaja en el 4 / 3 del tubo. Un id que no esté aquí sigue con la escena
- * decorativa.
+ * Los tres juegos del catálogo, todos con motor real. `lives` es con cuántas
+ * vidas arranca el HUD y `screen` el modificador que se añade a
+ * `.crt-screen` —vacío cuando el motor ya encaja en el 4 / 3 del tubo.
  */
 const ENGINES: Record<
   string,
@@ -64,8 +61,6 @@ const ENGINES: Record<
 
 type Run = EngineRun;
 
-const NEW_RUN: Run = { score: 0, lives: LIVES, level: 1 };
-
 export function GamePlayer({
   game,
   restored,
@@ -75,9 +70,7 @@ export function GamePlayer({
 }) {
   const { user } = useSession();
   const engine = ENGINES[game.id];
-  const initialRun: Run = engine
-    ? { score: 0, lives: engine.lives, level: 1 }
-    : NEW_RUN;
+  const initialRun: Run = { score: 0, lives: engine.lives, level: 1 };
 
   // /jugar/[id] está detrás del proxy, así que aquí siempre hay sesión: la
   // rama sin usuario sólo existe porque useSession() la admite en el tipo.
@@ -106,19 +99,11 @@ export function GamePlayer({
     router.push(`/auth?next=${encodeURIComponent(vuelta)}`);
   };
 
+  // Una partida empezada cuenta como jugada, se termine o no.
   useEffect(() => {
-    if (engine || over || paused) return;
-    const timer = setInterval(() => {
-      setRun((prev) => {
-        const score = prev.score + Math.floor(10 + Math.random() * 90);
-        // Misma regla que el template: un nivel por cada 2500 puntos.
-        const level =
-          score > 0 && score % 2500 < 100 ? prev.level + 1 : prev.level;
-        return { ...prev, score, level };
-      });
-    }, TICK_MS);
-    return () => clearInterval(timer);
-  }, [engine, over, paused]);
+    const supabase = createClient();
+    supabase.rpc("increment_game_plays", { p_slug: game.id });
+  }, [game.id]);
 
   // Con una partida recuperada el motor se monta de cero detrás del modal y su
   // primer aviso (0 puntos) pisaría la puntuación que se acaba de recuperar.
@@ -180,25 +165,17 @@ export function GamePlayer({
       </div>
 
       <div className="crt">
-        <div className={"crt-screen" + (engine?.screen ? " " + engine.screen : "")}>
-          {engine ? (
-            <engine.Component
-              key={runKey}
-              /* FIN también congela el motor: el bucle no sigue tras el modal. */
-              paused={paused || over}
-              onTogglePause={togglePause}
-              onRun={handleRun}
-              onOver={handleOver}
-            />
-          ) : (
-            <div className="game-arena" aria-hidden>
-              <div className="grid-floor" />
-              <div className="enemy e1" />
-              <div className="enemy e2" />
-              <div className="enemy e3" />
-              <div className="player-ship" />
-            </div>
-          )}
+        <div
+          className={"crt-screen" + (engine.screen ? " " + engine.screen : "")}
+        >
+          <engine.Component
+            key={runKey}
+            /* FIN también congela el motor: el bucle no sigue tras el modal. */
+            paused={paused || over}
+            onTogglePause={togglePause}
+            onRun={handleRun}
+            onOver={handleOver}
+          />
           {paused && (
             <div
               className="crt-content"
