@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { GamePlayer, type RestoredRun } from "@/components/game-player";
-import { getGame } from "@/lib/games";
+import { getGameBySlug } from "@/lib/supabase/games";
 
 /** Un entero positivo y razonable, o nada: la URL la escribe cualquiera. */
 function positiveInt(value: string | string[] | undefined): number | null {
@@ -11,7 +11,7 @@ function positiveInt(value: string | string[] | undefined): number | null {
 
 export default async function GamePlayerPage(props: PageProps<"/jugar/[id]">) {
   const { id } = await props.params;
-  const game = getGame(id);
+  const game = await getGameBySlug(id);
   if (!game) notFound();
 
   // Vuelta desde /auth con la partida de un invitado que acaba de entrar.

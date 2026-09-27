@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Game } from "@/lib/games";
+import type { Game } from "@/lib/supabase/games";
 
 /** Versión compacta de la tarjeta de la biblioteca, para el carril del home. */
 export function MiniCard({ game }: { game: Game }) {

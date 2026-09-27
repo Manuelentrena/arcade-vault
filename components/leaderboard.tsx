@@ -1,4 +1,4 @@
-import type { ScoreRow } from "@/lib/scores";
+import type { ScoreRow } from "@/lib/supabase/scores";
 
 function medal(index: number): string {
   if (index === 0) return " top1";
@@ -11,6 +11,14 @@ export function Leaderboard({ rows }: { rows: ScoreRow[] }) {
   return (
     <div className="leaderboard">
       <h3>MEJORES PUNTUACIONES</h3>
+      {rows.length === 0 && (
+        <div
+          className="lb-empty"
+          style={{ color: "var(--ink-faint)", padding: "24px 0" }}
+        >
+          AÚN NADIE HA JUGADO
+        </div>
+      )}
       {rows.map((r, i) => (
         <div key={r.name} className={"lb-row" + medal(i)}>
           <div className="rk">#{String(r.rank).padStart(2, "0")}</div>

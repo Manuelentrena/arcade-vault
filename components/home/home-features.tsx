@@ -2,7 +2,7 @@ import {
   FeatureIcon,
   type FeatureIconKind,
 } from "@/components/home/feature-icon";
-import type { GameColor } from "@/lib/games";
+import type { GameColor } from "@/lib/supabase/games";
 
 type Feature = {
   icon: FeatureIconKind;

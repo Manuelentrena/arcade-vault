@@ -2,20 +2,33 @@
 
 import { useMemo, useState } from "react";
 import { GameCard } from "@/components/game-card";
-import { CATS, GAMES, type CatFilter } from "@/lib/games";
+import type { CatFilter, Categoria, Game } from "@/lib/supabase/games";
 
-export function LibraryBrowser() {
+// Sentinel del filtro "sin categoría": no es una fila real de `categorias`,
+// así que se declara aquí en vez de importarla como valor (arrastraría a
+// `lib/supabase/games.ts`, que depende de `next/headers`, al bundle cliente).
+const TODOS = "TODOS" as const;
+
+export function LibraryBrowser({
+  games,
+  categorias,
+}: {
+  games: Game[];
+  categorias: Categoria[];
+}) {
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState<CatFilter>("TODOS");
+  const [cat, setCat] = useState<CatFilter>(TODOS);
+
+  const chips: CatFilter[] = [TODOS, ...categorias.map((c) => c.nombre)];
 
   const filtered = useMemo(
     () =>
-      GAMES.filter(
+      games.filter(
         (g) =>
-          (cat === "TODOS" || g.cat === cat) &&
+          (cat === TODOS || g.cat === cat) &&
           g.title.toLowerCase().includes(q.toLowerCase()),
       ),
-    [q, cat],
+    [games, q, cat],
   );
 
   return (
@@ -33,7 +46,7 @@ export function LibraryBrowser() {
           />
         </div>
         <div className="av-chips">
-          {CATS.map((c) => (
+          {chips.map((c) => (
             <button
               key={c}
               className={"chip" + (cat === c ? " active" : "")}
