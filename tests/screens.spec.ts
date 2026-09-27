@@ -216,6 +216,23 @@ test.describe("capturas de referencia", () => {
         // El home mide casi 4000px: cada captura tarda, y los 5s por defecto no
         // dan para las dos tomas iguales que Playwright exige.
         timeout: route.name === "home" ? 30_000 : undefined,
+        // ARKANOID y ASTEROIDES sí guardan puntuaciones reales en otras
+        // pruebas (SPEC 18); en paralelo no hay forma de saber si esta
+        // captura corre antes o después de esa escritura, así que su "MEJOR
+        // PUNTUACIÓN" se enmascara en vez de fijar la captura a un orden.
+        // TETRIX se deja fuera a propósito: ninguna prueba le guarda nada, así
+        // que su tarjeta sigue en "—" siempre y no hace falta enmascararla.
+        mask:
+          route.name === "biblioteca"
+            ? [
+                page
+                  .locator(".card", { hasText: "ASTEROIDES" })
+                  .locator(".score-badge"),
+                page
+                  .locator(".card", { hasText: "ARKANOID" })
+                  .locator(".score-badge"),
+              ]
+            : undefined,
       });
     });
   }
@@ -385,11 +402,33 @@ test.describe("reproductor", () => {
       .toBeGreaterThan(0);
   }
 
-  test("FIN abre el modal y guardar no persiste nada", async ({ page }) => {
+  /**
+   * ARKANOID, no TETRIX: esta prueba guarda de verdad en `scores` (SPEC 18) y
+   * las capturas de referencia dependen de que TETRIX y el salón (su pestaña
+   * por defecto) sigan vacíos durante toda la suite. El nivel 1 es el relleno
+   * completo y el saque determinista, así que un solo `Space` puntúa siempre.
+   *
+   * Solo en desktop: desktop y mobile comparten la misma base y la misma
+   * cuenta semilla (PX_KAI); si los dos proyectos jugaran ARKANOID a la vez,
+   * el que puntuara menos no superaría la marca que acaba de guardar el otro
+   * y GUARDAR PUNTUACIÓN nunca aparecería. No es una diferencia de viewport.
+   */
+  test("FIN abre el modal y la primera puntuación se guarda como récord", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(
+      isMobile,
+      "compite por la misma cuenta y el mismo juego que desktop",
+    );
     await signIn(page);
-    await page.goto("/jugar/tetrix");
-    await expect(page.locator(".tetris-board")).toBeVisible();
-    await scoreSomething(page);
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".ark-board")).toBeVisible();
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+    await page.keyboard.press("Space");
+    await expect
+      .poll(async () => scoreOf(await score.innerText()), { timeout: 15000 })
+      .toBeGreaterThan(0);
     await page.getByRole("button", { name: "FIN" }).click();
 
     const modal = page.getByRole("dialog");
@@ -400,13 +439,16 @@ test.describe("reproductor", () => {
     await expect(modal.locator("input")).toHaveCount(0);
     await expect(modal.locator(".modal-player .v")).toHaveText("PX_KAI");
 
+    // Primera vez que PX_KAI juega ARKANOID en esta base: sin marca previa,
+    // cuenta como récord y save_score inserta de verdad en `scores`.
     await modal.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }).click();
-    await expect(page.locator(".toast-saved")).toHaveText(
-      "▸ PUNTUACIÓN GUARDADA_",
+    await expect(page.locator(".toast-saved")).toContainText(
+      "¡NUEVA MARCA PERSONAL!",
     );
 
-    const stored = await page.evaluate(() => localStorage.getItem("av_scores"));
-    expect(stored).toBeNull();
+    // Verificación de extremo a extremo: la ficha ya lee esa fila real.
+    await page.goto("/juego/arkanoid");
+    await expect(page.locator(".lb-row").first()).toContainText("PX_KAI");
   });
 
   test("JUGAR DE NUEVO reinicia la partida", async ({ page }) => {
@@ -474,23 +516,41 @@ test.describe("fin de partida como invitado", () => {
     );
   });
 
-  test("al volver con sesión la partida aparece guardada", async ({ page }) => {
+  /**
+   * ASTEROIDES, no TETRIX: esta prueba autoguarda de verdad en `scores`
+   * (SPEC 18); TETRIX se deja intacto para las capturas de referencia y para
+   * no competir por el mismo récord con la prueba de ARKANOID de arriba. La
+   * partida recuperada no necesita el motor real: solo la query de la URL.
+   *
+   * La puntuación es aleatoria, no fija: desktop y mobile comparten cuenta y
+   * base, y con un valor fijo el proyecto que corriera segundo encontraría su
+   * propio "récord" ya batido por el primero (empate, no supera). Al azar la
+   * probabilidad de que coincidan es despreciable — mismo espíritu que
+   * `unique()` para los correos de las pruebas de alta.
+   */
+  test("al volver con sesión, una partida récord se autoguarda de verdad", async ({
+    page,
+  }) => {
+    const puntuacion = 10_000 + Math.floor(Math.random() * 900_000);
+    const formateada = puntuacion.toLocaleString("es-ES");
+
     // Con sesión de verdad: el helper signIn() no codifica `next`, así que la
     // vuelta se reproduce navegando directamente a la URL que /auth entrega.
     await signIn(page);
-    await page.goto("/jugar/tetrix?puntuacion=42000&nivel=3");
+    await page.goto(`/jugar/asteroides?puntuacion=${puntuacion}&nivel=3`);
 
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible();
-    // En español sólo se agrupa a partir de cinco dígitos: 4200 va sin punto.
-    await expect(modal.locator(".final")).toHaveText("42.000");
-    await expect(page.locator(".toast-saved")).toHaveText(
-      "▸ PUNTUACIÓN GUARDADA_",
+    await expect(modal.locator(".final")).toHaveText(formateada);
+    // Primera vez que PX_KAI juega ASTEROIDES: sin marca previa, se
+    // autoguarda como récord sin que el jugador pulse nada.
+    await expect(page.locator(".toast-saved")).toContainText(
+      `¡NUEVA MARCA PERSONAL! ${formateada}`,
     );
-    // Y nada se ha persistido: sigue sin existir almacenamiento de marcas.
-    expect(
-      await page.evaluate(() => localStorage.getItem("av_scores")),
-    ).toBeNull();
+
+    // Verificación de extremo a extremo: la ficha ya lee esa fila real.
+    await page.goto("/juego/asteroides");
+    await expect(page.locator(".lb-row").first()).toContainText("PX_KAI");
   });
 });
 

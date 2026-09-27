@@ -74,6 +74,10 @@ type TetrisGameProps = {
   onRun: (run: TetrisRun) => void;
   /** Top-out: el reproductor abre el modal FIN DEL JUEGO. */
   onOver: () => void;
+  /** Vidas iniciales reales (`games.vidas`). */
+  initialLives: number;
+  /** Tope de nivel real (`games.niveles`); null = sin tope. */
+  maxLevel: number | null;
 };
 
 export function TetrisGame({
@@ -81,6 +85,8 @@ export function TetrisGame({
   onTogglePause,
   onRun,
   onOver,
+  initialLives,
+  maxLevel,
 }: TetrisGameProps) {
   const boardRef = useRef<HTMLCanvasElement | null>(null);
   const nextRef = useRef<HTMLCanvasElement | null>(null);
@@ -88,7 +94,8 @@ export function TetrisGame({
   // El estado del motor vive en un ref: a 60 fps un setState por fotograma
   // reconciliaría React para pintar en un canvas que React no gestiona.
   const stateRef = useRef<TetrisState | null>(null);
-  if (stateRef.current === null) stateRef.current = createState();
+  if (stateRef.current === null)
+    stateRef.current = createState(initialLives, maxLevel);
 
   const colorsRef = useRef<readonly string[]>(PIECE_FALLBACK);
   const gridRef = useRef("rgba(0, 245, 255, 0.18)");

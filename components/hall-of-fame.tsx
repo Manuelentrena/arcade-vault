@@ -131,7 +131,14 @@ export function HallOfFame({
               style={{ animationDelay: `${rows.length * 50 + 50}ms` }}
             >
               {userBest === null ? (
-                <div className="pl" style={{ color: "var(--yellow)" }}>
+                <div
+                  className="pl"
+                  style={{
+                    gridColumn: "1 / -1",
+                    textAlign: "center",
+                    color: "var(--yellow)",
+                  }}
+                >
                   AÚN NO HAS JUGADO
                 </div>
               ) : (

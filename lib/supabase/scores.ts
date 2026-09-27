@@ -7,6 +7,11 @@ export type ScoreRow = {
   date: string;
 };
 
+/** `created_at` llega como ISO 8601 de Postgres; se pinta en formato es-ES. */
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-ES");
+}
+
 /** `scores.game_id` es el uuid interno de `games`; las páginas solo conocen el slug. */
 async function gameIdForSlug(slug: string): Promise<string | null> {
   const supabase = await createClient();
@@ -38,7 +43,7 @@ export async function getLeaderboard(
     rank: index + 1,
     name: row.profiles?.username ?? "—",
     score: row.score,
-    date: row.created_at,
+    date: formatDate(row.created_at),
   }));
 }
 

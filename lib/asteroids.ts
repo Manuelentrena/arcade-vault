@@ -4,7 +4,8 @@
  *
  * Portado de `references/started-games/02-asteroids/game.js` con los cambios de
  * regla decididos en la SPEC 14: rozamiento por segundo en vez de por fotograma,
- * una sola vida, disparo mantenido, oleada topada en diez rocas y dos objetos
+ * una sola vida (llega como parámetro de `createState()` desde `games.vidas`,
+ * SPEC 18), disparo mantenido, oleada topada en diez rocas y dos objetos
  * (disparo triple y escudo) en vez del único `3x` de la referencia.
  *
  * El estado se muta in situ a propósito: el componente lo guarda en un `useRef`
@@ -13,9 +14,6 @@
 
 export const WORLD_W = 800;
 export const WORLD_H = 600;
-
-/** Una sola vida: el primer choque sin escudo termina la partida. */
-export const LIVES = 1;
 
 /** Tope de rocas por oleada. El nivel sigue subiendo sin límite. */
 export const MAX_ROCKS = 10;
@@ -215,7 +213,7 @@ function spawnWave(state: AsteroidsState): void {
   }
 }
 
-export function createState(): AsteroidsState {
+export function createState(lives: number): AsteroidsState {
   const state: AsteroidsState = {
     ship: createShip(),
     bullets: [],
@@ -223,7 +221,7 @@ export function createState(): AsteroidsState {
     drops: [],
     particles: [],
     score: 0,
-    lives: LIVES,
+    lives,
     level: 1,
     over: false,
     killsSinceDrop: 0,

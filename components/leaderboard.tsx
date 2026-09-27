@@ -14,13 +14,13 @@ export function Leaderboard({ rows }: { rows: ScoreRow[] }) {
       {rows.length === 0 && (
         <div
           className="lb-empty"
-          style={{ color: "var(--ink-faint)", padding: "24px 0" }}
+          style={{ color: "var(--ink-faint)", padding: "24px 16px" }}
         >
           AÚN NADIE HA JUGADO
         </div>
       )}
       {rows.map((r, i) => (
-        <div key={r.name} className={"lb-row" + medal(i)}>
+        <div key={r.rank} className={"lb-row" + medal(i)}>
           <div className="rk">#{String(r.rank).padStart(2, "0")}</div>
           <div className="pl">
             {r.name}

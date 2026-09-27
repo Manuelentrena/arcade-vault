@@ -52,6 +52,10 @@ type ArkanoidGameProps = {
   onRun: (run: ArkanoidRun) => void;
   /** Última bola perdida: el reproductor abre el modal FIN DEL JUEGO. */
   onOver: () => void;
+  /** Vidas iniciales reales (`games.vidas`). */
+  initialLives: number;
+  /** Tope de nivel real (`games.niveles`); ARKANOID no lo usa (sin tope). */
+  maxLevel: number | null;
 };
 
 export function ArkanoidGame({
@@ -59,13 +63,14 @@ export function ArkanoidGame({
   onTogglePause,
   onRun,
   onOver,
+  initialLives,
 }: ArkanoidGameProps) {
   const boardRef = useRef<HTMLCanvasElement | null>(null);
 
   // El estado del motor vive en un ref: a 60 fps un setState por fotograma
   // reconciliaría React para pintar en un canvas que React no gestiona.
   const stateRef = useRef<ArkanoidState | null>(null);
-  if (stateRef.current === null) stateRef.current = createState();
+  if (stateRef.current === null) stateRef.current = createState(initialLives);
 
   const colorsRef = useRef<readonly string[]>(BRICK_FALLBACK);
   const inkRef = useRef("#e8f0ff");

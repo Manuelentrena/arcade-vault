@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { GamePlayer, type RestoredRun } from "@/components/game-player";
 import { getGameBySlug } from "@/lib/supabase/games";
+import { getServerSession } from "@/lib/supabase/session";
+import { getUserBestScore } from "@/lib/supabase/scores";
 
 /** Un entero positivo y razonable, o nada: la URL la escribe cualquiera. */
 function positiveInt(value: string | string[] | undefined): number | null {
@@ -23,5 +25,13 @@ export default async function GamePlayerPage(props: PageProps<"/jugar/[id]">) {
       ? undefined
       : { score, level: positiveInt(params.nivel) ?? 1 };
 
-  return <GamePlayer game={game} restored={restored} />;
+  // Solo un usuario real (no invitado) tiene una marca que comparar; un
+  // invitado nunca llega a guardar, así que su mejor marca no importa aquí.
+  const session = await getServerSession();
+  const initialBest =
+    session && !session.isGuest ? await getUserBestScore(id, session.id) : null;
+
+  return (
+    <GamePlayer game={game} restored={restored} initialBest={initialBest} />
+  );
 }

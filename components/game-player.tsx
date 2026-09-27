@@ -14,9 +14,6 @@ import { ArkanoidGame } from "@/components/arkanoid-game";
 import { AsteroidsGame } from "@/components/asteroids-game";
 import { TetrisGame } from "@/components/tetris-game";
 import type { Game } from "@/lib/supabase/games";
-import { LIVES as ARKANOID_LIVES } from "@/lib/arkanoid";
-import { LIVES as ASTEROIDS_LIVES } from "@/lib/asteroids";
-import { LIVES as TETRIX_LIVES } from "@/lib/tetris";
 import { displayName } from "@/lib/supabase/user";
 import { createClient } from "@/lib/supabase/client";
 
@@ -39,24 +36,25 @@ export type EngineProps = {
   onTogglePause: () => void;
   onRun: (run: EngineRun) => void;
   onOver: () => void;
+  /** Vidas iniciales reales, de `games.vidas` (SPEC 18). */
+  initialLives: number;
+  /** Tope de nivel real, de `games.niveles`; null = sin tope. Solo TETRIX lo usa. */
+  maxLevel: number | null;
 };
 
 /**
- * Los tres juegos del catálogo, todos con motor real. `lives` es con cuántas
- * vidas arranca el HUD y `screen` el modificador que se añade a
- * `.crt-screen` —vacío cuando el motor ya encaja en el 4 / 3 del tubo.
+ * Los tres juegos del catálogo, todos con motor real. `screen` es el
+ * modificador que se añade a `.crt-screen` —vacío cuando el motor ya encaja
+ * en el 4 / 3 del tubo. Las vidas y el tope de nivel ya no viven aquí: cada
+ * uno llega de `game.vidas`/`game.niveles` (SPEC 18).
  */
 const ENGINES: Record<
   string,
-  { Component: ComponentType<EngineProps>; lives: number; screen: string }
+  { Component: ComponentType<EngineProps>; screen: string }
 > = {
-  tetrix: { Component: TetrisGame, lives: TETRIX_LIVES, screen: "tetris" },
-  asteroides: {
-    Component: AsteroidsGame,
-    lives: ASTEROIDS_LIVES,
-    screen: "rocks",
-  },
-  arkanoid: { Component: ArkanoidGame, lives: ARKANOID_LIVES, screen: "" },
+  tetrix: { Component: TetrisGame, screen: "tetris" },
+  asteroides: { Component: AsteroidsGame, screen: "rocks" },
+  arkanoid: { Component: ArkanoidGame, screen: "" },
 };
 
 type Run = EngineRun;
@@ -64,13 +62,16 @@ type Run = EngineRun;
 export function GamePlayer({
   game,
   restored,
+  initialBest = null,
 }: {
   game: Game;
   restored?: RestoredRun;
+  /** Mejor marca real del usuario para este juego, si hay sesión no invitada. */
+  initialBest?: number | null;
 }) {
   const { user } = useSession();
   const engine = ENGINES[game.id];
-  const initialRun: Run = { score: 0, lives: engine.lives, level: 1 };
+  const initialRun: Run = { score: 0, lives: game.vidas, level: 1 };
 
   // /jugar/[id] está detrás del proxy, así que aquí siempre hay sesión: la
   // rama sin usuario sólo existe porque useSession() la admite en el tipo.
@@ -86,8 +87,20 @@ export function GamePlayer({
   const [paused, setPaused] = useState(false);
   // Volver de /auth con una partida recuperada reabre su modal de fin.
   const [over, setOver] = useState(recuperada);
-  // Y la da por guardada: es justo lo que el jugador fue a hacer a /auth.
-  const [saved, setSaved] = useState(recuperada);
+  // Ya no se da por guardada sin más: el guardado real depende de si es récord.
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  // Mejor marca conocida del jugador para este juego; se sincroniza con la
+  // respuesta del servidor en cada guardado, sea récord o no.
+  const [bestScore, setBestScore] = useState<number | null>(
+    initialBest ?? null,
+  );
+  // Se fija junto con `saved`, solo para el copy "(ANTES …)".
+  const [previousBestAtSave, setPreviousBestAtSave] = useState<number | null>(
+    null,
+  );
+  const isRecord = bestScore === null || run.score > bestScore;
   // Cambiar la key remonta el motor: es todo el reinicio que hace falta.
   const [runKey, setRunKey] = useState(0);
   const pathname = usePathname();
@@ -117,12 +130,58 @@ export function GamePlayer({
   }, []);
   const handleOver = useCallback(() => setOver(true), []);
 
+  /**
+   * Guarda de verdad la partida actual. Solo se llama cuando `isRecord` ya es
+   * cierto (el botón no aparece si no lo es): el servidor vuelve a comprobarlo
+   * igualmente y nunca confía en ese estado del cliente.
+   */
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setSaveError(false);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .rpc("save_score", {
+        p_slug: game.id,
+        p_score: run.score,
+        p_level: run.level,
+      })
+      .single();
+    setSaving(false);
+    if (error || !data) {
+      setSaveError(true);
+      return;
+    }
+    if (data.is_new_record) {
+      setBestScore(run.score);
+      setPreviousBestAtSave(data.previous_best);
+      setSaved(true);
+    } else {
+      // Carrera perdida (otra pestaña guardó mientras tanto): la marca real
+      // manda, y el siguiente render ya pinta solo la rama de "no es récord".
+      setBestScore(data.previous_best);
+    }
+  }, [game.id, run.score, run.level]);
+
+  // La partida recuperada de /auth se autoguarda si es récord; si no lo es,
+  // el modal ya pinta esa rama sola con el `bestScore` inicial, sin llamar
+  // al servidor. Se difiere con setTimeout(0): handleSave actualiza estado en
+  // su primera línea (antes del primer await), y llamarlo en línea dentro del
+  // efecto dispararía ese setState de forma síncrona durante el propio efecto.
+  useEffect(() => {
+    if (!(recuperada && !isGuest && !saved && !saving && isRecord)) return;
+    const id = setTimeout(() => void handleSave(), 0);
+    return () => clearTimeout(id);
+  }, [recuperada, isGuest, saved, saving, isRecord, handleSave]);
+
   const restart = () => {
     ignoreRun.current = false;
     setRun(initialRun);
     setPaused(false);
     setOver(false);
     setSaved(false);
+    setSaving(false);
+    setSaveError(false);
+    setPreviousBestAtSave(null);
     setRunKey((k) => k + 1);
     // Sin esto, recargar volvería a abrir el modal con la partida de la URL.
     if (restored) router.replace(pathname, { scroll: false });
@@ -175,6 +234,8 @@ export function GamePlayer({
             onTogglePause={togglePause}
             onRun={handleRun}
             onOver={handleOver}
+            initialLives={game.vidas}
+            maxLevel={game.niveles}
           />
           {paused && (
             <div
@@ -223,7 +284,12 @@ export function GamePlayer({
               <span className="v">{name}</span>
             </div>
             {saved ? (
-              <div className="toast-saved">▸ PUNTUACIÓN GUARDADA_</div>
+              <div className="toast-saved">
+                ▸ ¡NUEVA MARCA PERSONAL! {run.score.toLocaleString("es-ES")}
+                {previousBestAtSave !== null &&
+                  ` (ANTES ${previousBestAtSave.toLocaleString("es-ES")})`}
+                _
+              </div>
             ) : isGuest ? (
               <div className="guest-save">
                 <p>
@@ -234,12 +300,25 @@ export function GamePlayer({
                   INICIAR SESIÓN PARA GUARDAR
                 </button>
               </div>
+            ) : isRecord ? (
+              <>
+                <div className="input-row">
+                  <button
+                    className="btn yellow"
+                    onClick={() => void handleSave()}
+                    disabled={saving}
+                  >
+                    {saving ? "GUARDANDO…" : "GUARDAR PUNTUACIÓN"}
+                  </button>
+                </div>
+                {saveError && !saving && (
+                  <div className="save-error">NO SE PUDO GUARDAR_</div>
+                )}
+              </>
             ) : (
-              /* Decorativo: no se persiste ninguna puntuación. */
-              <div className="input-row">
-                <button className="btn yellow" onClick={() => setSaved(true)}>
-                  GUARDAR PUNTUACIÓN
-                </button>
+              <div className="no-record">
+                TU MEJOR MARCA EN {game.title} SIGUE SIENDO{" "}
+                {bestScore?.toLocaleString("es-ES")}
               </div>
             )}
             <div className="actions">
