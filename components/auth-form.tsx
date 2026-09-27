@@ -233,7 +233,10 @@ export function AuthForm() {
       password: pass,
       options: {
         data: { username },
-        emailRedirectTo: `${window.location.origin}/auth/confirm`,
+        // Sin `next`, el enlace del correo cae a /biblioteca y una partida
+        // pendiente (guardar tras crear cuenta desde el modal de fin) se
+        // perdía — ver SPEC 18.
+        emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent(next)}`,
         captchaToken: captcha || undefined,
       },
     });

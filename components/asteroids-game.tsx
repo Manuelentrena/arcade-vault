@@ -60,6 +60,10 @@ type AsteroidsGameProps = {
   onRun: (run: AsteroidsRun) => void;
   /** Choque sin escudo: el reproductor abre el modal FIN DEL JUEGO. */
   onOver: () => void;
+  /** Vidas iniciales reales (`games.vidas`). */
+  initialLives: number;
+  /** Tope de nivel real (`games.niveles`); ASTEROIDES no lo usa (sin tope). */
+  maxLevel: number | null;
 };
 
 /** Altura del horizonte: la rejilla vive por debajo. */
@@ -140,13 +144,14 @@ export function AsteroidsGame({
   onTogglePause,
   onRun,
   onOver,
+  initialLives,
 }: AsteroidsGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // El estado del motor vive en un ref: a 60 fps un setState por fotograma
   // reconciliaría React para pintar en un lienzo que React no gestiona.
   const stateRef = useRef<AsteroidsState | null>(null);
-  if (stateRef.current === null) stateRef.current = createState();
+  if (stateRef.current === null) stateRef.current = createState(initialLives);
 
   // Teclado y mandos escriben en el mismo objeto: el motor no sabe de dónde
   // viene cada bandera.
@@ -303,11 +308,7 @@ export function AsteroidsGame({
       ctx.font = "bold 14px monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
-      ctx.fillText(
-        `${effect.label} ${effect.left.toFixed(1)}S`,
-        14,
-        14,
-      );
+      ctx.fillText(`${effect.label} ${effect.left.toFixed(1)}S`, 14, 14);
     }
   }, [context2d]);
 

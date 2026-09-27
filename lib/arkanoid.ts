@@ -6,7 +6,9 @@
  * referencia y, del sexto en adelante, generación determinista), curva de
  * velocidad de dos tramos con techo, rebote en la pala que depende del punto
  * de impacto —la referencia sólo invertía la vertical— y subpasos para que la
- * bola no atraviese nada a velocidad máxima.
+ * bola no atraviese nada a velocidad máxima. Las vidas (tres, como la
+ * referencia) llegan como parámetro de `createState()` desde `games.vidas`
+ * (SPEC 18), no como constante fija.
  *
  * El estado se muta in situ a propósito: el componente lo guarda en un `useRef`
  * y pinta en un canvas, así que un objeto nuevo por fotograma no aportaría nada.
@@ -15,9 +17,6 @@
 /** Espacio lógico del juego, heredado de la referencia. */
 export const WIDTH = 800;
 export const HEIGHT = 600;
-
-/** Tres vidas, como la referencia. */
-export const LIVES = 3;
 
 export const BRICK_COLS = 10;
 export const BRICK_ROWS = 6;
@@ -235,7 +234,7 @@ export function paddleSpeed(level: number): number {
   return Math.max(480, ballSpeed(level) * 1.5);
 }
 
-export function createState(): ArkanoidState {
+export function createState(lives: number): ArkanoidState {
   const state: ArkanoidState = {
     paddle: {
       x: (WIDTH - PADDLE_W) / 2,
@@ -255,7 +254,7 @@ export function createState(): ArkanoidState {
     bursts: [],
     score: 0,
     level: 1,
-    lives: LIVES,
+    lives,
     serving: true,
     serves: 0,
     over: false,

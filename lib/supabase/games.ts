@@ -26,10 +26,14 @@ export type Game = {
   dificultad: number;
   jugadores: number;
   perifericos: string[];
+  /** Vidas iniciales reales del motor. */
+  vidas: number;
+  /** Tope de nivel real del motor; null = sin tope. */
+  niveles: number | null;
 };
 
 const GAME_COLUMNS =
-  "id, slug, nombre, cover, image, color, short, long, plays, dificultad, jugadores, perifericos, categorias(nombre)";
+  "id, slug, nombre, cover, image, color, short, long, plays, dificultad, jugadores, perifericos, vidas, niveles, categorias(nombre)";
 
 function toGame(
   row: {
@@ -45,6 +49,8 @@ function toGame(
     dificultad: number;
     jugadores: number;
     perifericos: string[];
+    vidas: number;
+    niveles: number | null;
     categorias: { nombre: string } | null;
   },
   best: Record<string, number>,
@@ -63,6 +69,8 @@ function toGame(
     dificultad: row.dificultad,
     jugadores: row.jugadores,
     perifericos: row.perifericos,
+    vidas: row.vidas,
+    niveles: row.niveles,
   };
 }
 

@@ -211,6 +211,13 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
       };
+      save_score: {
+        Args: { p_level: number; p_score: number; p_slug: string };
+        Returns: {
+          is_new_record: boolean;
+          previous_best: number;
+        }[];
+      };
       stale_guest_ids: {
         Args: { p_days: number; p_limit: number };
         Returns: string[];
