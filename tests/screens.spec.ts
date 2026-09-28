@@ -476,6 +476,32 @@ test.describe("reproductor", () => {
     const viejo = await page.goto("/jugar/rocas");
     expect(viejo?.status()).toBe(404);
   });
+
+  /**
+   * SPEC 19: el botón de pantalla completa (flotando sobre el CRT, no en
+   * .hud-actions) solo tiene sentido en móvil, donde hay barra del navegador
+   * que ocultar. No se fuerza una entrada real a pantalla completa: la API
+   * depende de un gesto de usuario y de una pantalla real, y su
+   * comportamiento en Chromium headless es menos fiable que el resto de la
+   * suite.
+   */
+  test("el botón de pantalla completa solo existe en móvil", async ({
+    page,
+    isMobile,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    const toggle = page.getByRole("button", {
+      name: "Activar pantalla completa",
+    });
+    if (isMobile) {
+      await expect(toggle).toBeVisible();
+    } else {
+      // Existe en el DOM (la detección de soporte no depende del viewport)
+      // pero el CSS lo oculta por debajo de 720px, igual que .hamburger.
+      await expect(toggle).toBeHidden();
+    }
+  });
 });
 
 test.describe("fin de partida como invitado", () => {
