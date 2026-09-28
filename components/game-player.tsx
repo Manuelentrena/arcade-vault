@@ -13,6 +13,7 @@ import {
 import { useSession } from "@/components/session-provider";
 import { ArkanoidGame } from "@/components/arkanoid-game";
 import { AsteroidsGame } from "@/components/asteroids-game";
+import { BuscaminasGame } from "@/components/buscaminas-game";
 import { TetrisGame } from "@/components/tetris-game";
 import type { Game } from "@/lib/supabase/games";
 import { displayName } from "@/lib/supabase/user";
@@ -44,7 +45,7 @@ export type EngineProps = {
 };
 
 /**
- * Los tres juegos del catálogo, todos con motor real. `screen` es el
+ * Los cuatro juegos del catálogo, todos con motor real. `screen` es el
  * modificador que se añade a `.crt-screen` —vacío cuando el motor ya encaja
  * en el 4 / 3 del tubo. Las vidas y el tope de nivel ya no viven aquí: cada
  * uno llega de `game.vidas`/`game.niveles` (SPEC 18).
@@ -56,6 +57,7 @@ const ENGINES: Record<
   tetrix: { Component: TetrisGame, screen: "tetris" },
   asteroides: { Component: AsteroidsGame, screen: "rocks" },
   arkanoid: { Component: ArkanoidGame, screen: "" },
+  buscaminas: { Component: BuscaminasGame, screen: "minas" },
 };
 
 type Run = EngineRun;

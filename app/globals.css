@@ -973,6 +973,43 @@
   text-shadow: 0 0 8px var(--yellow);
 }
 
+.cover-minas {
+  background:
+    repeating-linear-gradient(
+        90deg,
+        transparent 0 34px,
+        var(--ink-faint) 34px 35px
+      )
+      0 0/100% 100%,
+    repeating-linear-gradient(
+        0deg,
+        transparent 0 34px,
+        var(--ink-faint) 34px 35px
+      )
+      0 0/100% 100%,
+    #0a1a12;
+  opacity: 1;
+}
+.cover-minas::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--green), var(--green)) 24% 28%/14% 20%,
+    linear-gradient(var(--green), var(--green)) 66% 58%/14% 20%;
+  background-repeat: no-repeat;
+  opacity: 0.35;
+}
+.cover-minas::before {
+  content: "✷";
+  position: absolute;
+  left: 48%;
+  top: 46%;
+  color: var(--ink);
+  font-size: 22px;
+  text-shadow: 0 0 8px var(--green);
+}
+
 /* ===== detail screen ===== */
 .av-detail {
   display: grid;
@@ -1560,6 +1597,134 @@
   }
   .rocks-objects {
     align-items: flex-end;
+  }
+}
+
+/* ===== BUSCAMINAS — cuarto escenario REAL dentro del CRT (SPEC 20) =====
+   Mismo mueble que ASTEROIDES: el tablero es un <canvas> a la izquierda y la
+   columna derecha lleva la cruceta y REVELAR/MARCAR. El cursor puede caer en
+   cualquier celda, incluida la última fila, así que los mandos no se
+   superponen al tablero. La pausa tampoco vive aquí: es el botón del HUD. */
+.minas-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2%, 20px);
+  padding: clamp(8px, 2%, 18px);
+  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
+}
+.minas-board {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.minas-side {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2%, 14px);
+  width: clamp(84px, 22%, 180px);
+  flex: 0 0 auto;
+}
+.minas-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.minas-side .l {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--ink-faint);
+  letter-spacing: 0.16em;
+}
+.minas-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: 100%;
+}
+.minas-pad .btn {
+  padding: 0;
+  gap: 0;
+  aspect-ratio: 1 / 1;
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.minas-pad .pad-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+.minas-pad .pad-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.minas-pad .pad-down {
+  grid-column: 2;
+  grid-row: 2;
+}
+.minas-pad .pad-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+.minas-side .pad-reveal,
+.minas-side .pad-flag {
+  width: 100%;
+  padding: 7px 0;
+  font-size: 11px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* A 390px la columna lateral dejaría el campo en 202 × 151: se ve y no se
+   juega. El escenario se apila, la pantalla pasa a 3/4 y los mandos bajan a
+   una fila con la cruceta a la izquierda y REVELAR/MARCAR a la derecha. */
+@media (max-width: 720px) {
+  .crt-screen.minas {
+    aspect-ratio: 3 / 4;
+  }
+  .minas-stage {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .minas-side {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    align-self: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+  .minas-block {
+    width: auto;
+  }
+  .minas-pad {
+    width: 93px;
+  }
+  .minas-pad .btn {
+    aspect-ratio: auto;
+    height: 44px;
+  }
+  .minas-side .pad-reveal,
+  .minas-side .pad-flag {
+    height: 44px;
+    padding: 0 14px;
   }
 }
 
