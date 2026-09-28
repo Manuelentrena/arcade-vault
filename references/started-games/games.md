@@ -29,6 +29,12 @@ A `⛶` toggle drives the real Fullscreen API over the whole `.av-player`. Two d
 
 ## Adding a fifth game
 
-Start with the **`/add-game`** skill: it front-loads the contract above (common HUD, `EngineProps`, the `ENGINES` registry, the `games`/`categorias` columns), asks only about what is genuinely undecided for that game, and writes a spec — never code. SPEC 20 came out of it.
+Deciding _which_ game comes first, and that is the **`game-planner`** subagent
+(`.agents/agents/game-planner.md`): it recomputes the catalog's gaps from the migrations, runs candidates
+through the eight hard gates the contract above implies, returns a ranked three with one recommendation,
+and records every idea — rejections included — in [`suggestions-games.md`](suggestions-games.md), which
+is its memory across runs. It writes no spec and no code; its last line is always `/add-game <TÍTULO>`.
+
+Then the **`/add-game`** skill: it front-loads the contract above (common HUD, `EngineProps`, the `ENGINES` registry, the `games`/`categorias` columns), asks only about what is genuinely undecided for that game, and writes a spec — never code. SPEC 20 came out of it.
 
 Where the pieces land: a pure module in `lib/`, a `"use client"` component in `components/`, a row in `ENGINES`, a `.crt-screen` modifier and its CSS in `app/globals.css`, an additive `insert into public.games` under `supabase/migrations/`, a cover image in `public/juegos/`, and a `describe` block in `tests/screens.spec.ts` that does not freeze the clock — the loops need a live `requestAnimationFrame` — and asserts nothing that depends on the randomness of a run.
