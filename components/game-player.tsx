@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentType,
 } from "react";
 import { useSession } from "@/components/session-provider";
@@ -106,6 +107,46 @@ export function GamePlayer({
   const pathname = usePathname();
   const router = useRouter();
 
+  // Pantalla completa real, solo botón visible en móvil (SPEC 19). El ref
+  // apunta al contenedor entero (HUD + CRT + pie), no solo al canvas: la
+  // Fullscreen API oculta el resto de la página (nav, footer) sola.
+  const playerRef = useRef<HTMLDivElement>(null);
+  // El servidor nunca tiene `document`: useSyncExternalStore es lo que evita
+  // que ese hueco produzca un desajuste de hidratación (getServerSnapshot
+  // devuelve el valor "sin soporte" que el HTML del servidor ya pintó).
+  const supportsFullscreen = useSyncExternalStore(
+    () => () => {},
+    () => Boolean(document.documentElement.requestFullscreen),
+    () => false,
+  );
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Cubre cualquier salida que no pase por el propio botón (Esc, gesto atrás
+  // de Android, etc.) y cierra la pantalla completa si el reproductor se
+  // desmonta (SALIR / VOLVER AL VAULT) mientras seguía activa.
+  useEffect(() => {
+    const el = playerRef.current;
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === el);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      if (document.fullscreenElement === el) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!playerRef.current) return;
+    if (document.fullscreenElement === playerRef.current) {
+      void document.exitFullscreen().catch(() => {});
+    } else {
+      void playerRef.current.requestFullscreen().catch(() => {});
+    }
+  }, []);
+
   /** Lleva la partida a /auth, que devuelve a este mismo juego con ella. */
   const goSignIn = () => {
     const vuelta = `${pathname}?puntuacion=${run.score}&nivel=${run.level}`;
@@ -189,7 +230,7 @@ export function GamePlayer({
   };
 
   return (
-    <div className="av-player fade-in">
+    <div className="av-player fade-in" ref={playerRef}>
       <div className="player-hud">
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
           <div className="hud-stat">
@@ -262,6 +303,20 @@ export function GamePlayer({
             </div>
           )}
         </div>
+        {supportsFullscreen && (
+          <button
+            className="btn ghost fullscreen-toggle"
+            onClick={toggleFullscreen}
+            aria-label={
+              isFullscreen
+                ? "Salir de pantalla completa"
+                : "Activar pantalla completa"
+            }
+            aria-pressed={isFullscreen}
+          >
+            ⛶
+          </button>
+        )}
         <div className="crt-bottom">
           <span className="led">SEÑAL OK</span>
           <span>{game.title} · CRT-83 · 60 HZ</span>

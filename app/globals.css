@@ -1157,6 +1157,28 @@
   display: flex;
   gap: 10px;
 }
+/* Solo tiene sentido ocultar la barra del navegador en móvil (SPEC 19); en
+   escritorio no hay barra que ocultar. Flota sobre el CRT (no dentro de
+   .hud-actions) para no competir por sitio con PAUSA/FIN/SALIR a 390px, y
+   sigue visible en pantalla completa como único control para salir.
+   Selector con el padre delante, igual que .av-nav .hamburger: con solo
+   .fullscreen-toggle, el orden de salida del build de CSS puede dejar el
+   display:inline-flex de .btn por encima de este display:none al empatar
+   en especificidad. */
+.crt .fullscreen-toggle {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  padding: 10px 12px;
+  background: rgba(5, 5, 7, 0.72);
+}
+/* Con PAUSA/FIN/SALIR ocultos en pantalla completa, este botón flotante es
+   la única forma de salir: hay que hacerlo antes de poder pausar o terminar. */
+.av-player:fullscreen .hud-actions {
+  display: none;
+}
 
 .crt {
   position: relative;
@@ -2092,6 +2114,9 @@
   }
   .av-player {
     padding: 0 16px 32px;
+  }
+  .crt .fullscreen-toggle {
+    display: inline-flex;
   }
 }
 
