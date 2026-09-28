@@ -243,7 +243,7 @@ test.describe("home", () => {
     await page.goto("/");
     await expect(page.locator("h1.home-title")).toContainText("EL ARCADE");
     await expect(page.locator(".feature-card")).toHaveCount(4);
-    await expect(page.locator(".mini-card")).toHaveCount(3);
+    await expect(page.locator(".mini-card")).toHaveCount(4);
     await expect(page.locator(".stat-block")).toHaveCount(3);
     await expect(page.locator(".tick-row")).toHaveCount(7);
     await expect(page.locator(".top-row")).toHaveCount(5);
@@ -312,10 +312,10 @@ test.describe("home sin animación de entrada", () => {
 });
 
 test.describe("biblioteca", () => {
-  test("muestra los 3 juegos", async ({ page }) => {
+  test("muestra los 4 juegos", async ({ page }) => {
     await page.goto("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(3);
-    await expect(page.locator(".cover-bg")).toHaveCount(3);
+    await expect(page.locator(".card")).toHaveCount(4);
+    await expect(page.locator(".cover-bg")).toHaveCount(4);
   });
 
   test("el buscador filtra por nombre", async ({ page }) => {
@@ -349,11 +349,14 @@ test.describe("biblioteca", () => {
     await expect(cover).toHaveAttribute("src", /asteroides\.png/);
   });
 
-  test("el chip PUZZLE deja un solo juego", async ({ page }) => {
+  test("el chip PUZZLE muestra TETRIX y BUSCAMINAS", async ({ page }) => {
     await page.goto("/biblioteca");
     await page.getByRole("button", { name: "PUZZLE" }).click();
-    await expect(page.locator(".card")).toHaveCount(1);
-    await expect(page.locator(".card .title")).toHaveText("TETRIX");
+    await expect(page.locator(".card")).toHaveCount(2);
+    await expect(page.locator(".card .title")).toHaveText([
+      "TETRIX",
+      "BUSCAMINAS",
+    ]);
   });
 
   test("la tarjeta navega al detalle y el botón atrás vuelve", async ({
@@ -364,7 +367,7 @@ test.describe("biblioteca", () => {
     await expect(page).toHaveURL("/juego/asteroides");
     await page.goBack();
     await expect(page).toHaveURL("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(3);
+    await expect(page.locator(".card")).toHaveCount(4);
   });
 });
 
@@ -849,10 +852,161 @@ test.describe("arkanoid", () => {
       .locator(".hud-actions .btn")
       .allInnerTexts();
 
+    await page.goto("/jugar/buscaminas");
+    await expect(page.locator(".minas-board")).toBeVisible();
+    const buscaminas = await page
+      .locator(".player-hud .hud-stat .l")
+      .allInnerTexts();
+    const botonesBuscaminas = await page
+      .locator(".hud-actions .btn")
+      .allInnerTexts();
+
     expect(arkanoid).toEqual(tetrix);
+    expect(arkanoid).toEqual(buscaminas);
     expect(arkanoid).toHaveLength(4);
     expect(botonesArkanoid).toEqual(botonesTetrix);
+    expect(botonesArkanoid).toEqual(botonesBuscaminas);
     expect(botonesArkanoid).toHaveLength(3);
+  });
+});
+
+test.describe("buscaminas", () => {
+  /**
+   * El cuarto juego con motor real. Como en los otros tres, aquí no se
+   * congela el reloj: el bucle de repintado necesita requestAnimationFrame
+   * vivo, aunque no haya gravedad ni caída automática. Las minas se colocan al
+   * azar, pero el primer Espacio/clic nunca puede tocar una: el signo de la
+   * puntuación no depende de la suerte. Sin captura del tablero.
+   */
+  async function openBuscaminas(page: Page) {
+    await signIn(page);
+    await page.goto("/jugar/buscaminas");
+    await expect(page.locator(".minas-board")).toBeVisible();
+  }
+
+  test("arranca con la rejilla y los mandos", async ({ page }) => {
+    await openBuscaminas(page);
+
+    await expect(
+      page.getByRole("img", { name: "Rejilla de BUSCAMINAS" }),
+    ).toBeVisible();
+
+    // El HUD es el común a todos los juegos: una vida, nivel 01, 0 puntos.
+    await expect(page.locator(".hud-stat").nth(1).locator(".v")).toHaveText(
+      "0",
+    );
+    await expect(page.locator(".hud-stat.lives .v")).toHaveText("♥");
+    await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
+
+    // Cuatro botones de movimiento más REVELAR y MARCAR; la pausa no vive aquí.
+    await expect(page.locator(".crt-screen .minas-pad .btn")).toHaveCount(4);
+    await expect(page.locator(".crt-screen .pad-reveal")).toBeVisible();
+    await expect(page.locator(".crt-screen .pad-flag")).toBeVisible();
+    await expect(page.locator(".minas-side .l")).toHaveText([
+      "MOVIMIENTO",
+      "REVELAR",
+      "MARCAR",
+    ]);
+    for (const label of [
+      "Mover el cursor arriba",
+      "Mover el cursor a la izquierda",
+      "Mover el cursor abajo",
+      "Mover el cursor a la derecha",
+      "Revelar la celda",
+      "Marcar con bandera",
+    ]) {
+      await expect(page.getByRole("button", { name: label })).toBeVisible();
+    }
+    await expect(
+      page.locator(".crt-screen").getByRole("button", { name: /PAUSA/ }),
+    ).toHaveCount(0);
+    await expect(page.locator(".crt-screen").first()).toHaveClass(/minas/);
+  });
+
+  test("revelar con Espacio puntúa y no desplaza la página", async ({
+    page,
+  }) => {
+    await openBuscaminas(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+    await expect(score).toHaveText("0");
+
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await page.keyboard.press("Space");
+
+    // El primer reveal siempre libera al menos la celda pulsada: el signo no
+    // depende de dónde caigan las minas.
+    await expect
+      .poll(async () => scoreOf(await score.innerText()))
+      .toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  });
+
+  test("el clic primario revela una celda del tablero", async ({ page }) => {
+    await openBuscaminas(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+    await expect(score).toHaveText("0");
+
+    await page.locator(".minas-board").click();
+
+    await expect
+      .poll(async () => scoreOf(await score.innerText()))
+      .toBeGreaterThan(0);
+  });
+
+  test("el clic secundario marca bandera sin abrir el menú contextual", async ({
+    page,
+  }) => {
+    await openBuscaminas(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+
+    const board = page.locator(".minas-board");
+    const box = await board.boundingBox();
+    if (!box) throw new Error("El tablero no tiene bounding box");
+
+    // Se escucha el contextmenu ANTES del clic: la promesa resuelve cuando
+    // el navegador lo dispare, con el `defaultPrevented` que dejó nuestro
+    // listener en el <canvas>.
+    const contextmenuPrevented = page.evaluate(
+      () =>
+        new Promise<boolean>((resolve) => {
+          window.addEventListener(
+            "contextmenu",
+            (event) => resolve(event.defaultPrevented),
+            { once: true },
+          );
+        }),
+    );
+
+    // Una celda cerca de la esquina superior izquierda, lejos del cursor
+    // inicial (centrado), para no marcar una celda ya revelada por otra prueba.
+    await board.click({
+      position: { x: box.width * 0.05, y: box.height * 0.05 },
+      button: "right",
+    });
+
+    expect(await contextmenuPrevented).toBe(true);
+    await expect(score).toHaveText("0");
+  });
+
+  test("PAUSA congela la partida", async ({ page }) => {
+    await openBuscaminas(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+
+    await page.keyboard.press("Space");
+    await expect
+      .poll(async () => scoreOf(await score.innerText()))
+      .toBeGreaterThan(0);
+
+    await page.getByRole("button", { name: "PAUSA" }).click();
+    await expect(page.getByText("EN PAUSA")).toBeVisible();
+
+    const pausado = scoreOf(await score.innerText());
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(1000);
+    expect(scoreOf(await score.innerText())).toBe(pausado);
+
+    await page.getByRole("button", { name: "REANUDAR" }).click();
+    await expect(page.getByText("EN PAUSA")).toHaveCount(0);
   });
 });
 
@@ -1076,7 +1230,7 @@ test.describe("salón de la fama", () => {
     await page.goto("/salon");
     // Nadie ha jugado todavía: sin podio, con el mensaje de estado vacío.
     await expect(page.locator(".podium-slot")).toHaveCount(0);
-    await expect(page.locator(".hall-tabs .chip")).toHaveCount(3);
+    await expect(page.locator(".hall-tabs .chip")).toHaveCount(4);
     await expect(page.getByText("AÚN NADIE HA JUGADO")).toBeVisible();
   });
 
