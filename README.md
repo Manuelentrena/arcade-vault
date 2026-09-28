@@ -442,12 +442,15 @@ Sin dominio propio, el SMTP por defecto de Supabase solo entrega a direcciones d
 
 ## Desarrollo guiado por specs
 
-Cada funcionalidad se escribe primero como spec y solo después como código. Dos skills gobiernan el flujo:
+Cada funcionalidad se escribe primero como spec y solo después como código. Tres skills gobiernan el flujo:
 
 - **`/spec`** — hace las preguntas necesarias y deja la spec en `specs/NN-slug.md`, en estado `Borrador`.
 - **`/spec-impl NN-slug`** — implementa una spec ya `Aprobado`, paso a paso, en la rama `spec-NN-slug`.
+- **`/add-game`** — el `/spec` específico de un juego nuevo: da por sentado el contrato que ya cumplen los cuatro motores y solo pregunta lo que de verdad está por decidir. De aquí salió la SPEC 20.
 
-Las skills son las de [Klerith/fernando-skills](https://github.com/Klerith/fernando-skills) y están incluidas en el repo, en `.agents/skills/`, con enlaces simbólicos desde `.claude/skills/` para que Claude Code las vea. Se instalaron con:
+Y un paso antes que todos ellos, el subagente **`game-planner`** (`.agents/agents/game-planner.md`), que decide **qué** juego entra: recalcula los huecos del catálogo desde las migraciones, pasa cada candidato por ocho puertas duras y devuelve una terna con una recomendación marcada. Su memoria entre ejecuciones es [`references/started-games/suggestions-games.md`](references/started-games/suggestions-games.md), donde queda cada sugerencia con su veredicto, incluidas las descartadas. No escribe specs ni código: la cadena es **`game-planner` → `/add-game` → `/spec-impl`**.
+
+Las skills son las de [Klerith/fernando-skills](https://github.com/Klerith/fernando-skills) y están incluidas en el repo, en `.agents/skills/`, con enlaces simbólicos desde `.claude/skills/` para que Claude Code las vea. El subagente sigue el mismo patrón desde `.agents/agents/`, con `.claude/agents/game-planner.md` como enlace simbólico al fichero versionado — y, a diferencia de las skills, un agente nuevo no aparece hasta reiniciar la sesión, porque el registro se lee al arrancar. Se instalaron con:
 
 ```bash
 npx skills@latest add Klerith/fernando-skills

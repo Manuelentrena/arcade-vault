@@ -30,6 +30,8 @@ For deeper UI/UX decisions — design systems, component patterns, accessibility
 
 Adding a new catalog game starts with the **`/add-game`** skill: it front-loads the contract the four existing engines already establish (common HUD, `EngineProps`, the `ENGINES` registry, the `games`/`categorias` columns), asks only about what is genuinely undecided for that game, and writes a spec — never code. SPEC 20 came out of it. The contract itself is written down in [`references/started-games/games.md`](references/started-games/games.md).
 
+One step earlier there is the **`game-planner`** subagent (`.agents/agents/game-planner.md`, symlinked from `.claude/agents/`), which answers _which_ game should go in rather than how to build it: it recomputes the catalog's gaps from the migrations (which category is empty, which `color` values are left, whether `jugadores = 2` is still unused), puts every candidate through eight hard gates drawn from the engine contract, and returns a ranked shortlist of three with one recommendation. It writes exactly one file — [`references/started-games/suggestions-games.md`](references/started-games/suggestions-games.md), its memory across runs, where every suggestion is recorded with its verdict, rejections included — and never a spec and never code. The chain is **`game-planner` → `/add-game` → `/spec-impl`**.
+
 ## Commands
 
 ```bash
@@ -147,7 +149,7 @@ Specs live in `specs/NN-slug.md`, numbered sequentially, written in Spanish, wit
 - `/spec` writes a new spec after a round of clarifying questions. It never writes code.
 - `/spec-impl NN-slug` implements an already-approved spec, step by step, on a `spec-NN-slug` branch.
 
-The skills are vendored in `.agents/skills/spec/`, `.agents/skills/spec-impl/` and `.agents/skills/add-game/`, with symlinks from `.claude/skills/` so Claude Code picks them up. `specs/.spec-config.yml` holds `AutoCreateBranch`, which controls whether `/spec-impl` creates the branch without asking.
+The skills are vendored in `.agents/skills/spec/`, `.agents/skills/spec-impl/` and `.agents/skills/add-game/`, with symlinks from `.claude/skills/` so Claude Code picks them up; the `game-planner` subagent follows the same pattern from `.agents/agents/`, with `.claude/agents/game-planner.md` as a symlink to the vendored file. A new agent only appears in the registry after restarting the session — it is read at startup, not on demand. `specs/.spec-config.yml` holds `AutoCreateBranch`, which controls whether `/spec-impl` creates the branch without asking.
 
 The index of specs and their current states lives in `README.md`. Keep it in sync when a spec's state changes.
 
