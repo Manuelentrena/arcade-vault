@@ -469,15 +469,16 @@ npx skills@latest add Klerith/fernando-skills
 | [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)                                 | Implementado | SPEC 07                                     |
 | [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)                                  | Implementado | SPEC 07                                     |
 | [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)                     | Implementado | SPEC 09                                     |
-| [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                                     | Aprobado     | SPEC 09                                     |
-| [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)                                 | Aprobado     | SPEC 11                                     |
+| [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                                     | Implementado | SPEC 09                                     |
+| [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)                                 | Implementado | SPEC 11                                     |
 | [13 — TETRIX: primer juego con motor real](specs/13-tetrix-motor-jugable.md)                                       | Implementado | SPEC 01, SPEC 04                            |
 | [14 — ASTEROIDES: segundo juego con motor real](specs/14-asteroides-motor-jugable.md)                              | Implementado | SPEC 01, SPEC 04, SPEC 13                   |
 | [15 — ARKANOID: tercer juego con motor real](specs/15-arkanoid-motor-jugable.md)                                   | Implementado | SPEC 01, SPEC 04, SPEC 13                   |
 | [16 — Tablas Supabase para juegos y puntuaciones](specs/16-tablas-supabase-juegos-y-puntuaciones.md)               | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15          |
 | [17 — Catálogo real desde Supabase y limpieza de decorativos](specs/17-catalogo-real-y-limpieza-de-decorativos.md) | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15, SPEC 16 |
 | [18 — Guardado real de puntuaciones en `scores`](specs/18-guardado-real-de-puntuaciones.md)                        | Implementado | SPEC 07, SPEC 16, SPEC 17                   |
-| [19 — Pantalla completa en el reproductor, solo en móvil](specs/19-pantalla-completa-movil.md)                     | Aprobado     | SPEC 12, SPEC 13, SPEC 14, SPEC 15, SPEC 18 |
+| [19 — Pantalla completa en el reproductor, solo en móvil](specs/19-pantalla-completa-movil.md)                     | Implementado | SPEC 12, SPEC 13, SPEC 14, SPEC 15, SPEC 18 |
+| [20 — BUSCAMINAS: cuarto motor jugable](specs/20-buscaminas-motor-jugable.md)                                      | Implementado | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19     |
 
 ## Referencias
 
