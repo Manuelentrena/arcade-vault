@@ -481,9 +481,10 @@ test.describe("reproductor", () => {
   });
 
   /**
-   * SPEC 19: el botón de pantalla completa (flotando sobre el CRT, no en
-   * .hud-actions) solo tiene sentido en móvil, donde hay barra del navegador
-   * que ocultar. No se fuerza una entrada real a pantalla completa: la API
+   * SPEC 19: el botón de pantalla completa solo tiene sentido en móvil, donde
+   * hay barra del navegador que ocultar. Ya no flota sobre el CRT: con PAUSA y
+   * FIN en el mando (SPEC 21) cabe en .hud-actions junto a SALIR. No se fuerza
+   * una entrada real a pantalla completa: la API
    * depende de un gesto de usuario y de una pantalla real, y su
    * comportamiento en Chromium headless es menos fiable que el resto de la
    * suite.
@@ -597,6 +598,7 @@ test.describe("tetrix", () => {
 
   test("arranca con el tablero, la pieza siguiente y la cruceta", async ({
     page,
+    isMobile,
   }) => {
     await openTetrix(page);
 
@@ -614,14 +616,23 @@ test.describe("tetrix", () => {
     await expect(page.locator(".hud-stat.lives .v")).toHaveText("♥");
     await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
 
-    // Los cinco botones están dentro de la pantalla; la pausa no.
+    // En escritorio los cinco botones están dentro de la pantalla; la pausa no.
+    // En móvil bajan al mando de consola (SPEC 21) y dentro del tubo sólo
+    // queda SIGUIENTE, que es estado del juego y no un control.
     await expect(page.locator(".crt-screen .tetris-pad .btn")).toHaveCount(4);
-    await expect(page.locator(".crt-screen .pad-drop")).toBeVisible();
-    await expect(page.locator(".tetris-side .l")).toHaveText([
-      "MOVIMIENTO",
-      "BAJAR",
-      "SIGUIENTE",
-    ]);
+    await expect(page.locator(".crt-screen .pad-drop")).toBeVisible({
+      visible: !isMobile,
+    });
+    await expect(page.locator(".tetris-side .tetris-next")).toBeVisible();
+    if (!isMobile) {
+      await expect(page.locator(".tetris-side .l")).toHaveText([
+        "MOVIMIENTO",
+        "BAJAR",
+        "SIGUIENTE",
+      ]);
+    }
+    // Los rótulos son los mismos en los dos viewports: en escritorio los lleva
+    // la columna del tubo y en móvil el mando, que hereda cada aria-label.
     for (const label of [
       "Rotar la pieza",
       "Mover a la izquierda",
@@ -681,7 +692,10 @@ test.describe("asteroides", () => {
     await expect(page.locator(".rocks-field")).toBeVisible();
   }
 
-  test("arranca con el campo, los mandos y la leyenda", async ({ page }) => {
+  test("arranca con el campo, los mandos y la leyenda", async ({
+    page,
+    isMobile,
+  }) => {
     await openAsteroides(page);
 
     await expect(
@@ -695,14 +709,20 @@ test.describe("asteroides", () => {
     await expect(page.locator(".hud-stat.lives .v")).toHaveText("♥");
     await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
 
-    // Los cuatro botones están dentro de la pantalla; la pausa no.
+    // En escritorio los cuatro botones están dentro de la pantalla; la pausa
+    // no. En móvil la columna entera —mandos y leyenda— se va al mando de
+    // consola (SPEC 21) y el campo recupera el 4 : 3 del tubo.
     await expect(page.locator(".crt-screen .rocks-pad .btn")).toHaveCount(3);
-    await expect(page.locator(".crt-screen .pad-fire")).toBeVisible();
-    await expect(page.locator(".rocks-side .l")).toHaveText([
-      "MOVIMIENTO",
-      "DISPARO",
-      "OBJETOS",
-    ]);
+    await expect(page.locator(".crt-screen .pad-fire")).toBeVisible({
+      visible: !isMobile,
+    });
+    if (!isMobile) {
+      await expect(page.locator(".rocks-side .l")).toHaveText([
+        "MOVIMIENTO",
+        "DISPARO",
+        "OBJETOS",
+      ]);
+    }
     for (const label of [
       "Empujar",
       "Girar a la izquierda",
@@ -712,12 +732,18 @@ test.describe("asteroides", () => {
       await expect(page.getByRole("button", { name: label })).toBeVisible();
     }
 
-    // La leyenda de objetos, con una entrada por cada uno de los dos.
+    // La leyenda de objetos, con una entrada por cada uno de los dos. Sólo en
+    // escritorio: en móvil no existe ni en el mando ni en ninguna otra parte,
+    // porque el lienzo ya dibuja los dos objetos cuando aparecen (SPEC 21).
     await expect(page.locator(".rocks-legend li")).toHaveCount(2);
-    await expect(page.locator(".rocks-legend .d")).toHaveText([
-      "TRIPLE",
-      "ESCUDO",
-    ]);
+    if (!isMobile) {
+      await expect(page.locator(".rocks-legend .d")).toHaveText([
+        "TRIPLE",
+        "ESCUDO",
+      ]);
+    } else {
+      await expect(page.locator(".rocks-legend")).toBeHidden();
+    }
 
     await expect(page.locator(".crt-screen").first()).toHaveClass(/rocks/);
   });
@@ -771,7 +797,10 @@ test.describe("arkanoid", () => {
     await expect(page.locator(".ark-board")).toBeVisible();
   }
 
-  test("arranca con el tablero y los tres mandos", async ({ page }) => {
+  test("arranca con el tablero y los tres mandos", async ({
+    page,
+    isMobile,
+  }) => {
     await openArkanoid(page);
 
     await expect(
@@ -785,8 +814,12 @@ test.describe("arkanoid", () => {
     await expect(page.locator(".hud-stat.lives .v")).toHaveText("♥ ♥ ♥");
     await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
 
-    // Los tres mandos están dentro de la pantalla; la pausa no.
+    // En escritorio los tres mandos están dentro de la pantalla; la pausa no.
+    // En móvil la fila entera baja al mando de consola (SPEC 21).
     await expect(page.locator(".crt-screen .ark-pad .btn")).toHaveCount(3);
+    await expect(page.locator(".crt-screen .ark-pad")).toBeVisible({
+      visible: !isMobile,
+    });
     for (const label of [
       "Mover la pala a la izquierda",
       "Lanzar la bola",
@@ -831,7 +864,10 @@ test.describe("arkanoid", () => {
     await expect(page.getByText("EN PAUSA")).toHaveCount(0);
   });
 
-  test("el HUD es el mismo que el de los otros juegos", async ({ page }) => {
+  test("el HUD es el mismo que el de los otros juegos", async ({
+    page,
+    isMobile,
+  }) => {
     await signIn(page);
 
     await page.goto("/jugar/arkanoid");
@@ -840,7 +876,7 @@ test.describe("arkanoid", () => {
       .locator(".player-hud .hud-stat .l")
       .allInnerTexts();
     const botonesArkanoid = await page
-      .locator(".hud-actions .btn")
+      .locator(".hud-actions .btn:visible")
       .allInnerTexts();
 
     await page.goto("/jugar/tetrix");
@@ -849,7 +885,7 @@ test.describe("arkanoid", () => {
       .locator(".player-hud .hud-stat .l")
       .allInnerTexts();
     const botonesTetrix = await page
-      .locator(".hud-actions .btn")
+      .locator(".hud-actions .btn:visible")
       .allInnerTexts();
 
     await page.goto("/jugar/buscaminas");
@@ -858,7 +894,7 @@ test.describe("arkanoid", () => {
       .locator(".player-hud .hud-stat .l")
       .allInnerTexts();
     const botonesBuscaminas = await page
-      .locator(".hud-actions .btn")
+      .locator(".hud-actions .btn:visible")
       .allInnerTexts();
 
     expect(arkanoid).toEqual(tetrix);
@@ -866,7 +902,11 @@ test.describe("arkanoid", () => {
     expect(arkanoid).toHaveLength(4);
     expect(botonesArkanoid).toEqual(botonesTetrix);
     expect(botonesArkanoid).toEqual(botonesBuscaminas);
-    expect(botonesArkanoid).toHaveLength(3);
+    // La fila cambia de contenido con el viewport, no con el juego: en móvil
+    // PAUSA y FIN bajan al mando y sube ⛶ desde el CRT (SPEC 21).
+    expect(botonesArkanoid).toEqual(
+      isMobile ? ["⛶", "SALIR"] : ["PAUSA", "FIN", "SALIR"],
+    );
   });
 });
 
@@ -884,7 +924,7 @@ test.describe("buscaminas", () => {
     await expect(page.locator(".minas-board")).toBeVisible();
   }
 
-  test("arranca con la rejilla y los mandos", async ({ page }) => {
+  test("arranca con la rejilla y los mandos", async ({ page, isMobile }) => {
     await openBuscaminas(page);
 
     await expect(
@@ -899,14 +939,21 @@ test.describe("buscaminas", () => {
     await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
 
     // Cuatro botones de movimiento más REVELAR y MARCAR; la pausa no vive aquí.
+    // En móvil la columna entera baja al mando de consola (SPEC 21).
     await expect(page.locator(".crt-screen .minas-pad .btn")).toHaveCount(4);
-    await expect(page.locator(".crt-screen .pad-reveal")).toBeVisible();
-    await expect(page.locator(".crt-screen .pad-flag")).toBeVisible();
-    await expect(page.locator(".minas-side .l")).toHaveText([
-      "MOVIMIENTO",
-      "REVELAR",
-      "MARCAR",
-    ]);
+    await expect(page.locator(".crt-screen .pad-reveal")).toBeVisible({
+      visible: !isMobile,
+    });
+    await expect(page.locator(".crt-screen .pad-flag")).toBeVisible({
+      visible: !isMobile,
+    });
+    if (!isMobile) {
+      await expect(page.locator(".minas-side .l")).toHaveText([
+        "MOVIMIENTO",
+        "REVELAR",
+        "MARCAR",
+      ]);
+    }
     for (const label of [
       "Mover el cursor arriba",
       "Mover el cursor a la izquierda",
@@ -1007,6 +1054,440 @@ test.describe("buscaminas", () => {
 
     await page.getByRole("button", { name: "REANUDAR" }).click();
     await expect(page.getByText("EN PAUSA")).toHaveCount(0);
+  });
+});
+
+/**
+ * SPEC 21 — el mando de consola de móvil. A ≤ 720px los cuatro motores sacan
+ * sus mandos del tubo y los sustituye un mando único, soldado bajo el CRT.
+ * Los mandos internos no se desmontan: siguen en el DOM en `display: none`, y
+ * Playwright no ve lo que está oculto — por eso todo lo de aquí se mide por
+ * visibilidad y por el árbol de roles, nunca por presencia en el DOM.
+ */
+test.describe("mando de consola en móvil", () => {
+  const JUEGOS = ["tetrix", "asteroides", "arkanoid", "buscaminas"] as const;
+
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(!isMobile, "el mando sólo existe por debajo de 720px");
+  });
+
+  test("el tubo se queda sin un solo botón visible en los cuatro juegos", async ({
+    page,
+  }) => {
+    await signIn(page);
+    for (const slug of JUEGOS) {
+      await page.goto(`/jugar/${slug}`);
+      await expect(page.locator(".game-pad")).toBeVisible();
+      const dentro = page.locator(".crt-screen button");
+      for (let i = 0; i < (await dentro.count()); i++) {
+        await expect(dentro.nth(i)).toBeHidden();
+      }
+      // Y el mando sí está, con su silueta completa: cuatro brazos y dos
+      // círculos, use el juego los seis o no.
+      await expect(page.locator(".game-pad .pad-arm")).toHaveCount(4);
+      await expect(page.locator(".game-pad .pad-round")).toHaveCount(2);
+    }
+  });
+
+  test("PAUSA y FIN viven en el mando, no en el HUD", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    await expect(
+      page.locator(".game-pad").getByRole("button", { name: "PAUSA" }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".game-pad").getByRole("button", { name: "FIN" }),
+    ).toBeVisible();
+    await expect(page.locator(".hud-actions .hud-pause")).toBeHidden();
+    await expect(page.locator(".hud-actions .hud-end")).toBeHidden();
+
+    // Y hacen exactamente lo que hacían arriba.
+    await page
+      .locator(".game-pad")
+      .getByRole("button", { name: "PAUSA" })
+      .click();
+    await expect(page.getByText("EN PAUSA")).toBeVisible();
+    await page
+      .locator(".game-pad")
+      .getByRole("button", { name: "REANUDAR" })
+      .click();
+    await expect(page.getByText("EN PAUSA")).toHaveCount(0);
+    await page
+      .locator(".game-pad")
+      .getByRole("button", { name: "FIN" })
+      .click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  test("el HUD se queda con ⛶ y SALIR, y nada más", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    const visibles = page.locator(".hud-actions > *:visible");
+    await expect(visibles).toHaveCount(2);
+    await expect(
+      page.locator(".hud-actions").getByRole("button", {
+        name: "Activar pantalla completa",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".hud-actions").getByRole("link", { name: "SALIR" }),
+    ).toBeVisible();
+  });
+
+  test("ninguna tecla lleva nada escrito dentro: el nombre va debajo", async ({
+    page,
+  }) => {
+    await signIn(page);
+    for (const slug of JUEGOS) {
+      await page.goto(`/jugar/${slug}`);
+      const mando = page.locator(".game-pad");
+      await expect(mando).toBeVisible();
+
+      // Ni la bandera de BUSCAMINAS ni el LANZAR de ARKANOID: la cara de una
+      // tecla no dice nunca lo que hace.
+      const dentro = await mando.evaluate((pad) =>
+        [...pad.querySelectorAll("button")]
+          .map((b) => b.textContent?.trim() ?? "")
+          .filter(Boolean),
+      );
+      expect(dentro).toEqual([]);
+
+      // Lo único escrito son la marca y los cuatro rótulos, siempre los
+      // mismos: cambia lo que hace cada tecla, no el dibujo del mando.
+      await expect(mando.locator(".pad-slot-label")).toHaveText([
+        "B",
+        "A",
+        "PAUSA",
+        "FIN",
+      ]);
+      await expect(mando.locator(".pad-brand")).toHaveText("ARCADE VAULT");
+
+      // Lo que explica la leyenda vive dentro del tubo, no en el mando.
+      await expect(mando).not.toContainText("TRIPLE");
+      await expect(mando).not.toContainText("ESCUDO");
+    }
+  });
+
+  test("las teclas que un juego no usa no tienen rol ni reciben foco", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    // ARKANOID sólo usa ←, → y el círculo A: arriba, abajo y el círculo B se
+    // pintan igualmente, apagados.
+    const apagadas = page.locator(".game-pad .is-off");
+    await expect(apagadas).toHaveCount(3);
+    for (let i = 0; i < 3; i++) {
+      await expect(apagadas.nth(i)).toBeVisible();
+      await expect(apagadas.nth(i)).toHaveAttribute("aria-hidden", "true");
+    }
+    // No están en el árbol de roles y no hay nada enfocable detrás de ellas.
+    await expect(page.locator(".game-pad").getByRole("button")).toHaveCount(5);
+    const enfocables = await page
+      .locator(".game-pad")
+      .evaluate(
+        (pad) =>
+          pad.querySelectorAll("button, [tabindex]:not([tabindex='-1'])")
+            .length,
+      );
+    expect(enfocables).toBe(5);
+  });
+
+  test("la señal sube al tubo y ya no queda franja bajo el mando", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/buscaminas");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    // La de escritorio se calla, y la de debajo del mando ya no existe: el
+    // mando es lo último del mueble.
+    await expect(page.locator(".crt-bottom-desktop")).toBeHidden();
+    await expect(page.locator(".crt-bottom-mobile")).toHaveCount(0);
+
+    // Su información vive ahora dentro del negro del tubo, con el LED verde
+    // de siempre y una sola línea.
+    const senal = page.locator(".screen-signal");
+    await expect(senal).toBeVisible();
+    await expect(senal.locator("span")).toHaveText(["SEÑAL OK", "BUSCAMINAS"]);
+    await expect(senal).not.toContainText("CRT-83");
+    await expect(senal).not.toContainText("CARGA");
+    await expect(senal.locator(".led")).toBeVisible();
+
+    // Y es lo primero del tubo, por encima de la leyenda y del juego.
+    const primero = await page.evaluate(() => {
+      const pantalla = document.querySelector(".crt-screen");
+      const senal = document.querySelector(".screen-signal");
+      return Boolean(pantalla && senal && pantalla.firstElementChild === senal);
+    });
+    expect(primero).toBe(true);
+  });
+
+  test("cada juego reserva su banda de leyenda dentro del tubo", async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    // BUSCAMINAS cuenta banderas puestas sobre las disponibles y sus minas.
+    await page.goto("/jugar/buscaminas");
+    await expect(page.locator(".screen-legend")).toBeVisible();
+    await expect(page.locator(".screen-legend")).toContainText("MINAS");
+
+    // ASTEROIDES recupera ahí los dos objetos que suelta.
+    await page.goto("/jugar/asteroides");
+    await expect(page.locator(".screen-legend")).toContainText("TRIPLE");
+    await expect(page.locator(".screen-legend")).toContainText("ESCUDO");
+
+    // Y quien no tiene nada que explicar reserva el hueco igualmente.
+    for (const slug of ["tetrix", "arkanoid"]) {
+      await page.goto(`/jugar/${slug}`);
+      await expect(page.locator(".screen-legend")).toHaveText("LEYENDA");
+    }
+  });
+
+  test("los tres números bajan del HUD a su banda, bajo el juego", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    // Arriba se queda el nombre del jugador y nada más.
+    await expect(page.locator(".player-hud .hud-stat:visible")).toHaveCount(1);
+    await expect(page.locator(".player-hud .hud-stat.player")).toBeVisible();
+
+    // Los tres, con sus rótulos, dentro del tubo y debajo del juego.
+    const marcador = page.locator(".screen-stats");
+    await expect(marcador).toBeVisible();
+    await expect(marcador.locator(".screen-stat .l")).toHaveText([
+      "PTS",
+      "VIDAS",
+      "NIVEL",
+    ]);
+    await expect(marcador.locator(".screen-stat.lives .v")).toHaveText("♥ ♥ ♥");
+    await expect(marcador.locator(".screen-stat.level .v")).toHaveText("01");
+
+    const ultimo = await page.evaluate(() => {
+      const pantalla = document.querySelector(".crt-screen");
+      const stats = document.querySelector(".screen-stats");
+      return Boolean(pantalla && stats && pantalla.lastElementChild === stats);
+    });
+    expect(ultimo).toBe(true);
+  });
+
+  test("el tubo y el mando van soldados, sin junta entre los dos", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/asteroides");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    // Se sondea en vez de medir una vez: el lienzo de ASTEROIDES fija su alto
+    // al escalarse, y una medida tomada antes de ese primer ajuste ve una
+    // junta que no existe un fotograma después.
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const crt = document.querySelector(".crt");
+          const pad = document.querySelector(".game-pad");
+          if (!crt || !pad) return Number.NaN;
+          return (
+            pad.getBoundingClientRect().top - crt.getBoundingClientRect().bottom
+          );
+        }),
+      )
+      // Cero de verdad, con el margen del subpíxel: entre el tubo y el mando
+      // no hay franja, ni separación, ni el borde de nadie.
+      .toBeLessThan(1);
+  });
+
+  test("el espacio de juego mide exactamente lo mismo en los cuatro", async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    const medidas: { w: number; h: number }[] = [];
+    for (const slug of JUEGOS) {
+      await page.goto(`/jugar/${slug}`);
+      await expect(page.locator(".game-pad")).toBeVisible();
+      medidas.push(
+        await page
+          .locator(".tetris-stage, .rocks-stage, .ark-stage, .minas-stage")
+          .evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            return { w: r.width, h: r.height };
+          }),
+      );
+    }
+
+    // La proporción ya no vive en `.crt-screen` —que apila señal, leyenda,
+    // juego y marcador— sino en la banda del juego, y es la misma en los
+    // cuatro: TETRIX renunció al 3 / 4 que tenía para él solo.
+    //
+    // Se comparan con un píxel de margen a propósito: el alto real es
+    // fraccionario (277,5) y el navegador lo resuelve a un lado o a otro según
+    // la posición de la banda. Exigir igualdad exacta hacía fallar el test una
+    // de cada cuatro veces sin que nada estuviera mal.
+    for (const m of medidas) {
+      expect(m.w / m.h).toBeCloseTo(4 / 3, 2);
+      expect(Math.abs(m.w - medidas[0].w)).toBeLessThanOrEqual(1);
+      expect(Math.abs(m.h - medidas[0].h)).toBeLessThanOrEqual(1);
+    }
+
+    // SIGUIENTE es estado del juego, no un control: se queda dentro del tubo.
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".crt-screen .tetris-next")).toBeVisible();
+  });
+
+  test("se juega de verdad con el mando en los cuatro juegos", async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    /** Pulsa y suelta una tecla del mando, como haría un pulgar. */
+    async function pulsar(nombre: string, ms = 200) {
+      const tecla = page.locator(".game-pad").getByLabel(nombre);
+      await tecla.scrollIntoViewIfNeeded();
+      const caja = await tecla.boundingBox();
+      if (!caja) throw new Error(`sin caja: ${nombre}`);
+      await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+      await page.mouse.down();
+      await page.waitForTimeout(ms);
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+    }
+
+    /** Huella del lienzo: si la tecla llega al motor, cambia. */
+    const huella = (sel: string) =>
+      page
+        .locator(sel)
+        .screenshot()
+        .then((b) => b.toString("base64"));
+
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    let antes = await huella("canvas.tetris-board");
+    await pulsar("Mover a la derecha", 60);
+    expect(await huella("canvas.tetris-board")).not.toBe(antes);
+
+    await page.goto("/jugar/asteroides");
+    await expect(page.locator(".rocks-field")).toBeVisible();
+    antes = await huella("canvas.rocks-field");
+    await pulsar("Empujar", 400);
+    expect(await huella("canvas.rocks-field")).not.toBe(antes);
+
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".ark-board")).toBeVisible();
+    antes = await huella("canvas.ark-board");
+    await pulsar("Lanzar la bola", 60);
+    expect(await huella("canvas.ark-board")).not.toBe(antes);
+
+    await page.goto("/jugar/buscaminas");
+    await expect(page.locator(".minas-board")).toBeVisible();
+    antes = await huella("canvas.minas-board");
+    await pulsar("Mover el cursor a la derecha", 60);
+    expect(await huella("canvas.minas-board")).not.toBe(antes);
+  });
+
+  test("los controles táctiles sobre el lienzo siguen vivos", async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    // Arrastrar la pala es el control más preciso de ARKANOID.
+    await page.goto("/jugar/arkanoid");
+    const tablero = page.locator("canvas.ark-board");
+    await expect(tablero).toBeVisible();
+    const caja = await tablero.boundingBox();
+    if (!caja) throw new Error("ARKANOID sin tablero");
+    const antes = await tablero.screenshot().then((b) => b.toString("base64"));
+    await page.mouse.move(caja.x + 30, caja.y + caja.height - 8);
+    await page.mouse.down();
+    await page.mouse.move(caja.x + caja.width - 30, caja.y + caja.height - 8, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    expect(
+      await tablero.screenshot().then((b) => b.toString("base64")),
+    ).not.toBe(antes);
+
+    // Y tocar la celda es el gesto natural de BUSCAMINAS.
+    await page.goto("/jugar/buscaminas");
+    const rejilla = page.locator("canvas.minas-board");
+    await expect(rejilla).toBeVisible();
+    const cajaR = await rejilla.boundingBox();
+    if (!cajaR) throw new Error("BUSCAMINAS sin rejilla");
+    const antesR = await rejilla.screenshot().then((b) => b.toString("base64"));
+    await page.mouse.click(
+      cajaR.x + cajaR.width * 0.4,
+      cajaR.y + cajaR.height * 0.4,
+    );
+    await page.waitForTimeout(250);
+    expect(
+      await rejilla.screenshot().then((b) => b.toString("base64")),
+    ).not.toBe(antesR);
+  });
+});
+
+/**
+ * El espejo en escritorio: lo que la SPEC 21 prometió NO tocar. Si algo de
+ * aquí se rompe, el cambio de móvil se ha filtrado por encima de 720px.
+ */
+test.describe("el reproductor de escritorio no se entera del mando", () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, "es justo lo contrario del bloque de móvil");
+  });
+
+  test("los mandos siguen dentro del tubo y el mando nuevo no existe", async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    for (const [slug, dentro] of [
+      ["tetrix", ".tetris-side .tetris-pad .btn"],
+      ["asteroides", ".rocks-side .rocks-pad .btn"],
+      ["arkanoid", ".ark-pad .btn"],
+      ["buscaminas", ".minas-side .minas-pad .btn"],
+    ] as const) {
+      await page.goto(`/jugar/${slug}`);
+      await expect(page.locator(".crt-screen")).toBeVisible();
+      await expect(page.locator(dentro).first()).toBeVisible();
+      await expect(page.locator(".game-pad")).toBeHidden();
+    }
+  });
+
+  test("la franja visible es la de dentro del CRT, con sus tres textos", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/buscaminas");
+
+    const franja = page.locator(".crt-bottom-desktop");
+    await expect(franja).toBeVisible();
+    await expect(franja.locator("span")).toHaveText([
+      "SEÑAL OK",
+      "BUSCAMINAS · CRT-83 · 60 HZ",
+      "CARGA · 1MB",
+    ]);
+    await expect(page.locator(".crt-bottom-mobile")).toBeHidden();
+    // Y sigue viviendo dentro de .crt, no colgando del reproductor.
+    await expect(page.locator(".crt > .crt-bottom-desktop")).toHaveCount(1);
+  });
+
+  test("PAUSA y FIN siguen en el HUD", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+
+    await expect(page.locator(".hud-actions .hud-pause")).toBeVisible();
+    await expect(page.locator(".hud-actions .hud-end")).toBeVisible();
+    await expect(page.locator(".hud-actions .fullscreen-toggle")).toBeHidden();
   });
 });
 
