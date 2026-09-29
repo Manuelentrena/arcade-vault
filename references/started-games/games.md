@@ -15,17 +15,102 @@ The prototypes that were ported live next to this one: `02-asteroids/`, `03-tetr
 
 ## The `ENGINES` registry
 
-`components/game-player.tsx` decides which one mounts through the `ENGINES` registry — `{ Component, screen }` keyed by `game.id` (the game's `slug`), where `screen` is the modifier added to `.crt-screen` and is empty when the engine already fits the tube's `4 / 3` (as `ARKANOID` does). The registry holds four rows today — `tetrix`/`tetris`, `asteroides`/`rocks`, `arkanoid`/`""`, `buscaminas`/`minas` — so adding a fifth engine means adding a row there, not another branch, plus a fifth row in `public.games`, since the catalog itself now lives in Supabase. Vidas and the level cap are no longer JS constants either (SPEC 18): `game-player.tsx` reads `game.vidas`/`game.niveles` from that same row and passes them to whichever engine mounts as `initialLives`/`maxLevel`, part of the shared `EngineProps` contract even though only `TETRIX` actually caps a level — `ASTEROIDES`, `ARKANOID` and `BUSCAMINAS` have `niveles: null` (no cap) by design, and `components/buscaminas-game.tsx` declares a structurally identical local `BuscaminasGameProps` and leaves `maxLevel` undestructured on purpose. `LIVES`/`MAX_LEVEL` no longer exist as exports of `lib/tetris.ts`/`lib/asteroids.ts`/`lib/arkanoid.ts`; `lib/buscaminas.ts` still exports a `LIVES = 1` that nothing imports — dead weight, not a second source of truth, and the rule stands: lives come from the row.
+`components/game-player.tsx` decides which one mounts through the `ENGINES` registry — `{ Component, screen, pad }` keyed by `game.id` (the game's `slug`), where `screen` is the modifier added to `.crt-screen` and is empty when the engine already fits the tube's `4 / 3` (as `ARKANOID` does), and `pad` is the game's mobile gamepad layout (SPEC 21, below) — the `aria-label` of each key it uses, nothing more. The registry holds four rows today — `tetrix`/`tetris`, `asteroides`/`rocks`, `arkanoid`/`""`, `buscaminas`/`minas` — so adding a fifth engine means adding a row there, not another branch, plus a fifth row in `public.games`, since the catalog itself now lives in Supabase. Vidas and the level cap are no longer JS constants either (SPEC 18): `game-player.tsx` reads `game.vidas`/`game.niveles` from that same row and passes them to whichever engine mounts as `initialLives`/`maxLevel`, part of the shared `EngineProps` contract even though only `TETRIX` actually caps a level — `ASTEROIDES`, `ARKANOID` and `BUSCAMINAS` have `niveles: null` (no cap) by design, and `components/buscaminas-game.tsx` declares a structurally identical local `BuscaminasGameProps` and leaves `maxLevel` undestructured on purpose. `LIVES`/`MAX_LEVEL` no longer exist as exports of `lib/tetris.ts`/`lib/asteroids.ts`/`lib/arkanoid.ts`; `lib/buscaminas.ts` still exports a `LIVES = 1` that nothing imports — dead weight, not a second source of truth, and the rule stands: lives come from the row.
 
 ## Two rules that keep the engines honest
 
-**The HUD is common to all four games** — player, score, hearts, level, and the `PAUSA` / `FIN` / `SALIR` buttons — so nothing game-specific goes into it and no pause control goes inside the screen; an engine only reports its numbers through `onRun`. What a game may draw inside its own canvas is its own state: `ASTEROIDES` paints the countdown of the active drop, never the score, the lives or the level, `ARKANOID` paints nothing but the board, and `BUSCAMINAS` nothing but the grid and its cursor.
+**The HUD is common to all four games** — player, score, hearts, level, and an action row — so nothing game-specific goes into it and no pause control goes inside the screen. The row's contents change with the viewport, never with the game: `PAUSA` / `FIN` / `SALIR` on desktop, and `⛶` / `SALIR` on mobile, where `PAUSA` and `FIN` live on the gamepad instead (SPEC 21); an engine only reports its numbers through `onRun`. What a game may draw inside its own canvas is its own state: `ASTEROIDES` paints the countdown of the active drop, never the score, the lives or the level, `ARKANOID` paints nothing but the board, and `BUSCAMINAS` nothing but the grid and its cursor.
 
 And **saving a score is real, but conditional** (SPEC 18): `game-player.tsx` calls `increment_game_plays()` on mount so `games.plays` counts every real attempt regardless of outcome, and separately, once the run ends (real game-over or the `FIN` button) `GUARDAR PUNTUACIÓN` calls the `save_score` RPC — only offered, and only wired to do anything, when the result beats the player's own best for that game; a non-record run shows "TU MEJOR MARCA … SIGUE SIENDO …" instead, with no request to the server at all. The modal shows the session's name — no editable input — and a guest gets an invitation to sign in instead of the save button: it sends the run to `/auth` and back through the URL (`/jugar/tetrix?puntuacion=&nivel=`), which `app/jugar/[id]/page.tsx` validates and hands to the player as `restored` — and, if it's still a record once a real session exists, the run auto-saves without another click.
 
 ## Fullscreen, mobile only (SPEC 19)
 
-A `⛶` toggle drives the real Fullscreen API over the whole `.av-player`. Two details depart from what the spec text proposed, and the code is the truth: the button **floats absolutely inside `.crt`** (`components/game-player.tsx:308-321`), not in `.hud-actions`, because at 390px `PAUSA`/`FIN`/`SALIR` already fill that row — and because `.av-player:fullscreen .hud-actions { display: none }` (`app/globals.css:1216-1218`) hides those three in fullscreen, which makes the floating button the only way out; and support is detected with `useSyncExternalStore` (`getServerSnapshot` returns `false`), not a `useEffect`, so the server HTML and the first client render agree. A `fullscreenchange` listener keeps `isFullscreen` honest against Esc and the Android back gesture, and unmounting the player exits if it was still active. CSS shows the button only under 720px (`app/globals.css:2283-2285`). There is no orientation lock, by decision.
+A `⛶` toggle drives the real Fullscreen API over the whole `.av-player`. It **used to float absolutely inside `.crt`**, because at 390px `PAUSA`/`FIN`/`SALIR` already filled the HUD row, and `.av-player:fullscreen .hud-actions { display: none }` then made that floating button the only way out of fullscreen. **SPEC 21 undid both**: with `PAUSA` and `FIN` moved down to the pad, `⛶` fits in `.hud-actions` beside `SALIR` and stops covering a corner of the canvas, and that `:fullscreen` rule is deleted — hiding the HUD would now hide `SALIR` as well, and the game controls are at the bottom, not the top. What did not change: support is detected with `useSyncExternalStore` (`getServerSnapshot` returns `false`), not a `useEffect`, so the server HTML and the first client render agree. A `fullscreenchange` listener keeps `isFullscreen` honest against Esc and the Android back gesture, and unmounting the player exits if it was still active. CSS shows the button only under 720px. There is no orientation lock, by decision.
+
+## The mobile gamepad (SPEC 21)
+
+At **≤ 720px** the four engines' own on-screen controls are hidden and a single console pad takes over,
+welded under the tube as part of the same cabinet — one silhouette for all four games, laid out like the
+handheld it is modelled on: the brand at the top, a four-armed D-pad on the left, two round red action
+buttons on the right set on a diagonal (B low, A high), and a centred row of two flat pills at the very
+bottom where that console puts SELECT and START. Above 720px none of this exists: desktop keeps every
+engine's controls inside `.crt-screen`, untouched. The media query is the **only** source of truth about
+what "mobile" is — the inner pads are hidden with CSS, never unmounted with `matchMedia`, which would add
+a second source of truth and the hydration mismatch SPEC 19 had to solve. The price is duplicated DOM in
+each viewport; the payoff is that desktop is not touched and Playwright never sees what is in
+`display: none`.
+
+**The contract.** `components/game-player.tsx` owns three types:
+
+```ts
+type PadAction = "up" | "down" | "left" | "right" | "a" | "b";
+type PadHandle = { press: (a: PadAction) => void; release: (a: PadAction) => void };
+type PadLayout = {
+  dpad: Partial<Record<"up" | "down" | "left" | "right", string>>; // aria-label per active direction
+  buttons: [string | null, string | null];                         // A and B; null = present but inert
+};
+```
+
+`PadLayout` carries **names, not glyphs** — no key paints anything on its face, so there is nothing else
+to store. `EngineProps` gains `padRef: Ref<PadHandle>`; each engine publishes its handle with
+`useImperativeHandle` and **must route it through the input path it already has** — `press`/`stopRepeat`
+in `tetris-game.tsx`, `setFlag` in `asteroids-game.tsx`, `heldRef` + `serve()` in `arkanoid-game.tsx`,
+`markDown`/`markUp` in `buscaminas-game.tsx` — never by touching state on its own. That is also what
+protects a press that lands before the loop exists: the existing guards already cover it.
+
+Four rules hold the pad together:
+
+- **The engine gets `press`/`release`, never a high-level action.** A physical pad presses and releases;
+  whether `←` repeats while held is the engine's business, and it already solves it.
+- **The layout lives in `ENGINES`, not in the engine.** All four schemes read together in twenty lines,
+  and a fifth game stays one more row in the registry.
+- **No key says what it does.** The action buttons are plain red circles and the pills are plain
+  capsules; the name sits **below** the key in its own `.pad-slot-label` (`B`, `A`, `PAUSA`/`REANUDAR`,
+  `FIN`), exactly as the reference console labels them, and the D-pad's arrows are drawn by CSS
+  (`.pad-arm::before`). What a button *does* in this game is told by the legend inside the tube, never by
+  the pad. For a screen reader the name is the button's `aria-label`; the label underneath is
+  `aria-hidden`.
+- **What a game does not use is still drawn.** Unused directions and the unused action button render as
+  dimmed inert `<span>`s — no role, no focus, no pointer events — so the silhouette is identical in all
+  four.
+
+`PAUSA` and `FIN` are the same two pills in every game, wired to `GamePlayer`'s own `togglePause` and
+`setOver(true)` — the same functions the HUD used, not new ones. The pad's three colours: the D-pad is
+`--cyan`, the two action buttons are `--magenta` — the same one the logo writes `VAULT` in — and both
+pills are `--ink`, the theme's bone white, so what tells `PAUSA` from `FIN` is the label under each, not
+its colour. `--amber` and `--violet` were promoted to named
+accents along the way and neither is on the pad now; both were already in the theme three times over
+(`--piece-z`/`--brick-amber`/`--rock-flame` and `--piece-j`/`--brick-violet`/`--rock-rock`), so naming
+them changed the pieces, bricks and rocks by exactly zero pixels. `--red` (`#ff2f45`) is the one colour
+genuinely new to the theme, and it is down to a single use: the mine glyph in the `BUSCAMINAS` legend,
+which in magenta would read as the flag. Relief and press feedback come from one recipe, `.pad-key`, parameterised with a `--key`
+custom property — the D-pad keeps the dark face, the action buttons and pills are solid in their own
+colour; under `prefers-reduced-motion` the press still sinks and glows and only the flash animation
+drops.
+
+**Three bands inside the tube.** At ≤ 720px `.crt-screen` stops being a `4 / 3` box and becomes a
+column of three:
+
+1. `.screen-signal` — the green LED and `SEÑAL OK` on the left, the game's title on the right. It is
+   what the `.crt-bottom` inside `.crt` says on desktop, moved into the black of the tube; that strip is
+   hidden on mobile and there is no strip under the pad at all.
+2. `.screen-legend` — **every game reserves it**, and each engine renders its own, because its contents
+   are game state and only the engine knows them: `BUSCAMINAS` shows flags placed over flags available
+   (which equals the mine count) plus the level's mines, `ASTEROIDES` shows `TRIPLE` and `ESCUDO`, and
+   `TETRIX` and `ARKANOID`, which have nothing to explain, show the word `LEYENDA` centred. Both bands
+   exist in the DOM in both viewports and only the media query decides which shows.
+3. The game itself — **the same box in all four: `aspect-ratio: 4 / 3`, `min-height: 0`,
+   `overflow: hidden`.** Those last two are load-bearing: without them `TETRIX`'s 10 × 20 board stretches
+   its own band and the ratio silently stops holding. `TETRIX` gave up the `3 / 4` screen it had to
+   itself — its cells are smaller for it — so that the four measure identically at the same resolution.
+
+The cabinet: `.crt` loses its bottom radius and its bottom ring at ≤ 720px (`clip-path`) and the pad
+picks both up, so there is no seam between them and the pad closes the cabinet. `⛶` came down from
+floating over the CRT into `.hud-actions` next to `SALIR`, which is now a two-control row on mobile;
+`.av-player:fullscreen .hud-actions { display: none }` from SPEC 19 is gone, because hiding the HUD
+would now hide `SALIR` too. Touch controls on the canvas survive untouched: dragging the paddle in
+`ARKANOID` and tapping a cell in `BUSCAMINAS` are still the most precise way to play them — the pad is
+one more route, not the only one.
 
 ## Adding a fifth game
 
@@ -37,4 +122,4 @@ is its memory across runs. It writes no spec and no code; its last line is alway
 
 Then the **`/add-game`** skill: it front-loads the contract above (common HUD, `EngineProps`, the `ENGINES` registry, the `games`/`categorias` columns), asks only about what is genuinely undecided for that game, and writes a spec — never code. SPEC 20 came out of it.
 
-Where the pieces land: a pure module in `lib/`, a `"use client"` component in `components/`, a row in `ENGINES`, a `.crt-screen` modifier and its CSS in `app/globals.css`, an additive `insert into public.games` under `supabase/migrations/`, a cover image in `public/juegos/`, and a `describe` block in `tests/screens.spec.ts` that does not freeze the clock — the loops need a live `requestAnimationFrame` — and asserts nothing that depends on the randomness of a run.
+Where the pieces land: a pure module in `lib/`, a `"use client"` component in `components/`, a row in `ENGINES` — `Component`, `screen` **and** its `pad` layout — a `.crt-screen` modifier and its CSS in `app/globals.css`, an additive `insert into public.games` under `supabase/migrations/`, a cover image in `public/juegos/`, and a `describe` block in `tests/screens.spec.ts` that does not freeze the clock — the loops need a live `requestAnimationFrame` — and asserts nothing that depends on the randomness of a run.

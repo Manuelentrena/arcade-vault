@@ -3,9 +3,13 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
+  useState,
   type PointerEvent as ReactPointerEvent,
+  type Ref,
 } from "react";
+import type { PadAction, PadHandle } from "@/components/game-player";
 import {
   CELL,
   COLS,
@@ -13,6 +17,7 @@ import {
   ROWS,
   WIDTH,
   createState,
+  minesForLevel,
   moveCursor,
   reveal,
   setCursor,
@@ -86,6 +91,21 @@ type BuscaminasGameProps = {
   initialLives: number;
   /** Ignorado: el nivel de BUSCAMINAS no tiene techo (games.niveles = null). */
   maxLevel: number | null;
+  /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
+  padRef: Ref<PadHandle>;
+};
+
+/**
+ * Las seis entradas del mando de móvil al `code` de teclado equivalente
+ * (SPEC 21). BUSCAMINAS es el único juego que usa las seis.
+ */
+const PAD_CODES: Record<PadAction, string> = {
+  up: "ArrowUp",
+  down: "ArrowDown",
+  left: "ArrowLeft",
+  right: "ArrowRight",
+  a: "Space",
+  b: "KeyF",
 };
 
 function drawFlag(
@@ -149,6 +169,7 @@ export function BuscaminasGame({
   onRun,
   onOver,
   initialLives,
+  padRef,
 }: BuscaminasGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -271,6 +292,26 @@ export function BuscaminasGame({
     onRunRef.current(run);
   }, []);
 
+  /**
+   * Lo único del estado del motor que sale a React además del HUD: las
+   * banderas puestas y las minas del nivel, que son la leyenda de BUSCAMINAS.
+   * Devolver `prev` cuando no cambia nada hace que React descarte el render,
+   * así que llamarlo tras cada acción no cuesta un repintado de más.
+   */
+  const [legend, setLegend] = useState({
+    flags: 0,
+    mines: minesForLevel(1),
+  });
+  const syncLegend = useCallback(() => {
+    const state = stateRef.current;
+    if (!state) return;
+    setLegend((prev) =>
+      prev.flags === state.flags && prev.mines === state.mines
+        ? prev
+        : { flags: state.flags, mines: state.mines },
+    );
+  }, []);
+
   /** Aplica una acción discreta (revelar, bandera) y repinta. */
   const act = useCallback(
     (action: (state: BuscaminasState) => void) => {
@@ -279,9 +320,12 @@ export function BuscaminasGame({
       action(state);
       draw();
       publish();
+      // Las banderas y las minas solo cambian aquí: poner o quitar una marca,
+      // y el salto de nivel que reparte minas nuevas.
+      syncLegend();
       if (state.over) onOverRef.current();
     },
-    [draw, paused, publish],
+    [draw, paused, publish, syncLegend],
   );
 
   // Los colores salen del tema: se leen una vez al montar.
@@ -464,6 +508,26 @@ export function BuscaminasGame({
     [act, cellFromEvent, paused],
   );
 
+  /**
+   * El mando de móvil (SPEC 21) pasa por `markDown`/`markUp`, los mismos que
+   * el teclado y la cruceta de dentro del tubo: aquí no hay lógica de entrada
+   * nueva, solo la traducción de PadAction al `code` de cada tecla.
+   */
+  useImperativeHandle(
+    padRef,
+    () => ({
+      press: (action: PadAction) => {
+        const code = PAD_CODES[action];
+        if (code) markDown(code);
+      },
+      release: (action: PadAction) => {
+        const code = PAD_CODES[action];
+        if (code) markUp(code);
+      },
+    }),
+    [markDown, markUp],
+  );
+
   /** Cruceta y REVELAR/MARCAR: mismo camino que un teclado o un mando físico. */
   const padProps = (code: string) => ({
     type: "button" as const,
@@ -478,73 +542,87 @@ export function BuscaminasGame({
   });
 
   return (
-    <div className="minas-stage">
-      <canvas
-        ref={canvasRef}
-        className="minas-board"
-        width={WIDTH}
-        height={HEIGHT}
-        role="img"
-        aria-label="Rejilla de BUSCAMINAS"
-        onPointerMove={onBoardPointerMove}
-        onPointerDown={onBoardPointerDown}
-        onContextMenu={(event) => event.preventDefault()}
-      />
-      <div className="minas-side">
-        <div className="minas-block">
-          <span className="l">MOVIMIENTO</span>
-          <div className="minas-pad">
+    <>
+      {/* La leyenda de BUSCAMINAS: banderas puestas sobre las disponibles —que
+          son tantas como minas— y el total de minas del nivel. */}
+      <div className="screen-legend">
+        <span className="screen-legend-item">
+          <span className="k flag">⚑</span>
+          {legend.flags} / {legend.mines}
+        </span>
+        <span className="screen-legend-item">
+          <span className="k mine">◉</span>
+          {legend.mines} MINAS
+        </span>
+      </div>
+      <div className="minas-stage">
+        <canvas
+          ref={canvasRef}
+          className="minas-board"
+          width={WIDTH}
+          height={HEIGHT}
+          role="img"
+          aria-label="Rejilla de BUSCAMINAS"
+          onPointerMove={onBoardPointerMove}
+          onPointerDown={onBoardPointerDown}
+          onContextMenu={(event) => event.preventDefault()}
+        />
+        <div className="minas-side">
+          <div className="minas-block">
+            <span className="l">MOVIMIENTO</span>
+            <div className="minas-pad">
+              <button
+                {...padProps("ArrowUp")}
+                className="btn pad-up"
+                aria-label="Mover el cursor arriba"
+              >
+                ▲
+              </button>
+              <button
+                {...padProps("ArrowLeft")}
+                className="btn pad-left"
+                aria-label="Mover el cursor a la izquierda"
+              >
+                ◀
+              </button>
+              <button
+                {...padProps("ArrowDown")}
+                className="btn pad-down"
+                aria-label="Mover el cursor abajo"
+              >
+                ▼
+              </button>
+              <button
+                {...padProps("ArrowRight")}
+                className="btn pad-right"
+                aria-label="Mover el cursor a la derecha"
+              >
+                ▶
+              </button>
+            </div>
+          </div>
+          <div className="minas-block">
+            <span className="l">REVELAR</span>
             <button
-              {...padProps("ArrowUp")}
-              className="btn pad-up"
-              aria-label="Mover el cursor arriba"
+              {...padProps("Space")}
+              className="btn pad-reveal"
+              aria-label="Revelar la celda"
             >
-              ▲
+              ␣ REVELAR
             </button>
+          </div>
+          <div className="minas-block">
+            <span className="l">MARCAR</span>
             <button
-              {...padProps("ArrowLeft")}
-              className="btn pad-left"
-              aria-label="Mover el cursor a la izquierda"
+              {...padProps("KeyF")}
+              className="btn magenta pad-flag"
+              aria-label="Marcar con bandera"
             >
-              ◀
-            </button>
-            <button
-              {...padProps("ArrowDown")}
-              className="btn pad-down"
-              aria-label="Mover el cursor abajo"
-            >
-              ▼
-            </button>
-            <button
-              {...padProps("ArrowRight")}
-              className="btn pad-right"
-              aria-label="Mover el cursor a la derecha"
-            >
-              ▶
+              ⚑ MARCAR
             </button>
           </div>
         </div>
-        <div className="minas-block">
-          <span className="l">REVELAR</span>
-          <button
-            {...padProps("Space")}
-            className="btn pad-reveal"
-            aria-label="Revelar la celda"
-          >
-            ␣ REVELAR
-          </button>
-        </div>
-        <div className="minas-block">
-          <span className="l">MARCAR</span>
-          <button
-            {...padProps("KeyF")}
-            className="btn magenta pad-flag"
-            aria-label="Marcar con bandera"
-          >
-            ⚑ MARCAR
-          </button>
-        </div>
       </div>
-    </div>
+    </>
   );
 }

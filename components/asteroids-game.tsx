@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  type PointerEvent,
+  type Ref,
+} from "react";
+import type { PadAction, PadHandle } from "@/components/game-player";
 import {
   DROP_RADIUS,
   MAX_DT,
@@ -64,6 +72,19 @@ type AsteroidsGameProps = {
   initialLives: number;
   /** Tope de nivel real (`games.niveles`); ASTEROIDES no lo usa (sin tope). */
   maxLevel: number | null;
+  /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
+  padRef: Ref<PadHandle>;
+};
+
+/**
+ * Las entradas del mando de móvil que ASTEROIDES usa, cada una a su bandera
+ * (SPEC 21). `down` y `b` no están: el mando los pinta apagados e inertes.
+ */
+const PAD_FLAGS: Partial<Record<PadAction, keyof Input>> = {
+  up: "thrust",
+  left: "left",
+  right: "right",
+  a: "fire",
 };
 
 /** Altura del horizonte: la rejilla vive por debajo. */
@@ -145,6 +166,7 @@ export function AsteroidsGame({
   onRun,
   onOver,
   initialLives,
+  padRef,
 }: AsteroidsGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -443,6 +465,27 @@ export function AsteroidsGame({
    * `setInterval` como la cruceta de TETRIX, porque aquí el motor ya lee un
    * estado mantenido en cada fotograma.
    */
+  /**
+   * El mando de móvil (SPEC 21) marca las mismas banderas que la cruceta de
+   * dentro del tubo, por el mismo `setFlag`: el bucle las lee en cada
+   * fotograma y su guarda descarta una pulsación anterior al arranque. `down`
+   * y `b` no existen en ASTEROIDES: el mando los pinta apagados.
+   */
+  useImperativeHandle(
+    padRef,
+    () => ({
+      press: (action: PadAction) => {
+        const flag = PAD_FLAGS[action];
+        if (flag) setFlag(flag, true);
+      },
+      release: (action: PadAction) => {
+        const flag = PAD_FLAGS[action];
+        if (flag) setFlag(flag, false);
+      },
+    }),
+    [setFlag],
+  );
+
   const padProps = (flag: keyof Input) => ({
     type: "button" as const,
     className: "btn",
@@ -456,66 +499,79 @@ export function AsteroidsGame({
   });
 
   return (
-    <div className="rocks-stage">
-      <canvas
-        ref={canvasRef}
-        className="rocks-field"
-        width={WORLD_W}
-        height={WORLD_H}
-        role="img"
-        aria-label="Campo de ASTEROIDES"
-      />
-      <div className="rocks-side">
-        <div className="rocks-block">
-          <span className="l">MOVIMIENTO</span>
-          <div className="rocks-pad">
+    <>
+      {/* La leyenda de objetos vuelve, pero dentro del tubo y sobre el campo:
+          los dos que ASTEROIDES suelta y lo que hace cada uno. Solo se ve a
+          ≤ 720px; en escritorio sigue mandando la columna `.rocks-side`. */}
+      <div className="screen-legend">
+        <span className="screen-legend-item">
+          <span className="k triple">3x</span>TRIPLE
+        </span>
+        <span className="screen-legend-item">
+          <span className="k shield">◎</span>ESCUDO
+        </span>
+      </div>
+      <div className="rocks-stage">
+        <canvas
+          ref={canvasRef}
+          className="rocks-field"
+          width={WORLD_W}
+          height={WORLD_H}
+          role="img"
+          aria-label="Campo de ASTEROIDES"
+        />
+        <div className="rocks-side">
+          <div className="rocks-block">
+            <span className="l">MOVIMIENTO</span>
+            <div className="rocks-pad">
+              <button
+                {...padProps("thrust")}
+                className="btn pad-thrust"
+                aria-label="Empujar"
+              >
+                ▲
+              </button>
+              <button
+                {...padProps("left")}
+                className="btn pad-left"
+                aria-label="Girar a la izquierda"
+              >
+                ◀
+              </button>
+              <button
+                {...padProps("right")}
+                className="btn pad-right"
+                aria-label="Girar a la derecha"
+              >
+                ▶
+              </button>
+            </div>
+          </div>
+          <div className="rocks-block">
+            <span className="l">DISPARO</span>
             <button
-              {...padProps("thrust")}
-              className="btn pad-thrust"
-              aria-label="Empujar"
+              {...padProps("fire")}
+              className="btn magenta pad-fire"
+              aria-label="Disparar"
             >
-              ▲
-            </button>
-            <button
-              {...padProps("left")}
-              className="btn pad-left"
-              aria-label="Girar a la izquierda"
-            >
-              ◀
-            </button>
-            <button
-              {...padProps("right")}
-              className="btn pad-right"
-              aria-label="Girar a la derecha"
-            >
-              ▶
+              ◉ FUEGO
             </button>
           </div>
-        </div>
-        <div className="rocks-block">
-          <span className="l">DISPARO</span>
-          <button
-            {...padProps("fire")}
-            className="btn magenta pad-fire"
-            aria-label="Disparar"
-          >
-            ◉ FUEGO
-          </button>
-        </div>
-        <div className="rocks-block rocks-objects">
-          <span className="l">OBJETOS</span>
-          <ul className="rocks-legend">
-            <li>
-              <span className="k triple">3x</span>
-              <span className="d">TRIPLE</span>
-            </li>
-            <li>
-              <span className="k shield">◎</span>
-              <span className="d">ESCUDO</span>
-            </li>
-          </ul>
+          <div className="rocks-block rocks-objects">
+            <span className="l">OBJETOS</span>
+            <ul className="rocks-legend">
+              <li>
+                <span className="k triple">3x</span>
+                <span className="d">TRIPLE</span>
+              </li>
+              <li>
+                <span className="k shield">◎</span>
+                <span className="d">ESCUDO</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

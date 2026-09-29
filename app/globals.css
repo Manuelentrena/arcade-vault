@@ -18,14 +18,24 @@
   --magenta: #ff006e;
   --yellow: #f5ff00;
   --green: #00ff88;
+  /* El quinto acento. Ya estaba tres veces en el tema (piezas, ladrillos,
+     rocas): esto le pone nombre, sin cambiar un píxel de los tres. */
+  --violet: #8a5cff;
+  /* El naranja del tema. Igual que el violeta, ya estaba tres veces (pieza Z,
+     ladrillo, llama de la nave): esto le pone nombre, sin cambiar un píxel de
+     los tres. */
+  --amber: #ff5a1f;
+  /* El único acento que el tema no tenía ya. Le queda un solo uso: la mina de
+     la leyenda de BUSCAMINAS, que en magenta se confundiría con la bandera. */
+  --red: #ff2f45;
 
   /* piezas de TETRIX — los 4 neones más tres mezclas de la misma familia */
   --piece-i: #00f5ff; /* = --cyan */
   --piece-o: #f5ff00; /* = --yellow */
   --piece-t: #ff006e; /* = --magenta */
   --piece-s: #00ff88; /* = --green */
-  --piece-z: #ff5a1f; /* ámbar: entre magenta y amarillo */
-  --piece-j: #8a5cff; /* violeta: entre cian y magenta */
+  --piece-z: var(--amber); /* ámbar: entre magenta y amarillo */
+  --piece-j: var(--violet); /* violeta: entre cian y magenta */
   --piece-l: #0077ff; /* azul eléctrico: entre cian y violeta */
 
   /* ladrillos de ARKANOID — la misma familia que las piezas de TETRIX */
@@ -33,15 +43,15 @@
   --brick-magenta: #ff006e; /* = --magenta */
   --brick-yellow: #f5ff00; /* = --yellow */
   --brick-green: #00ff88; /* = --green */
-  --brick-amber: #ff5a1f; /* = --piece-z, en lugar del rojo */
-  --brick-violet: #8a5cff; /* = --piece-j, en lugar del hotpink */
+  --brick-amber: var(--amber); /* = --piece-z, en lugar del rojo */
+  --brick-violet: var(--violet); /* = --piece-j, en lugar del hotpink */
   --brick-silver: #c7d0e0; /* = --silver: el ladrillo neutro del muro 2 */
 
   /* ASTEROIDES — los mismos neones de la web, repartidos por elemento */
   --rock-ship: #00f5ff; /* = --cyan */
-  --rock-rock: #8a5cff; /* = --piece-j, violeta */
+  --rock-rock: var(--violet); /* = --piece-j, violeta */
   --rock-bullet: #f5ff00; /* = --yellow */
-  --rock-flame: #ff5a1f; /* = --piece-z, ámbar */
+  --rock-flame: var(--amber); /* = --piece-z, ámbar */
   --rock-triple: #ff006e; /* = --magenta */
   --rock-shield: #00ff88; /* = --green */
   --rock-grid: rgba(0, 245, 255, 0.14);
@@ -74,6 +84,9 @@
   --color-magenta: var(--magenta);
   --color-yellow: var(--yellow);
   --color-green: var(--green);
+  --color-violet: var(--violet);
+  --color-red: var(--red);
+  --color-amber: var(--amber);
 
   --color-gold: var(--gold);
   --color-silver: var(--silver);
@@ -813,10 +826,17 @@
 .av-search input::placeholder {
   color: var(--ink-faint);
 }
+/* A 11px la lupa se perdía dentro de un campo de 48px. Va en la tipografía
+   mono —la pixel no trae el glifo y caía en la de respaldo— y a un cuerpo que
+   se lee junto al texto de 13px. */
 .av-search .ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--cyan);
-  font-family: var(--pixel);
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 24px;
+  line-height: 1;
 }
 
 .av-chips {
@@ -1195,26 +1215,16 @@
   gap: 10px;
 }
 /* Solo tiene sentido ocultar la barra del navegador en móvil (SPEC 19); en
-   escritorio no hay barra que ocultar. Flota sobre el CRT (no dentro de
-   .hud-actions) para no competir por sitio con PAUSA/FIN/SALIR a 390px, y
-   sigue visible en pantalla completa como único control para salir.
+   escritorio no hay barra que ocultar. Ya no flota sobre el CRT: con PAUSA y
+   FIN en el mando (SPEC 21) cabe en la fila del HUD junto a SALIR, y así deja
+   de tapar una esquina del lienzo.
    Selector con el padre delante, igual que .av-nav .hamburger: con solo
    .fullscreen-toggle, el orden de salida del build de CSS puede dejar el
    display:inline-flex de .btn por encima de este display:none al empatar
    en especificidad. */
-.crt .fullscreen-toggle {
+.hud-actions .fullscreen-toggle {
   display: none;
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
-  padding: 10px 12px;
-  background: rgba(5, 5, 7, 0.72);
-}
-/* Con PAUSA/FIN/SALIR ocultos en pantalla completa, este botón flotante es
-   la única forma de salir: hay que hacerlo antes de poder pausar o terminar. */
-.av-player:fullscreen .hud-actions {
-  display: none;
+  padding: 12px 14px;
 }
 
 .crt {
@@ -1294,12 +1304,15 @@
   color: var(--ink-faint);
   letter-spacing: 0.16em;
 }
-.crt-bottom .led {
+/* El LED de señal. Vive en las dos franjas: la de escritorio, dentro de
+   `.crt`, y la banda de señal de móvil, dentro del tubo (SPEC 21). Por eso la
+   regla es del propio `.led` y no de su contenedor. */
+.led {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.crt-bottom .led::before {
+.led::before {
   content: "";
   width: 8px;
   height: 8px;
@@ -1307,6 +1320,410 @@
   background: var(--green);
   box-shadow: 0 0 6px var(--green);
 }
+
+/* ===== mando de consola de móvil (SPEC 21) =====
+   El mando es hermano de `.crt` y el CSS lo suelda a él a ≤ 720px: mismo
+   cuerpo, mismo negro, sin franja ni junta entre los dos, y es él quien cierra
+   el mueble por abajo. Por encima de 720px no existe — ahí cada motor sigue
+   con su mando dentro del tubo, intacto.
+
+   El dibujo sigue la consola de referencia: la marca arriba, la cruceta a la
+   izquierda, los dos botones de acción a la derecha y en diagonal, y la fila
+   de PAUSA y FIN abajo del todo, centrada. Ninguna tecla lleva nada escrito
+   dentro: el nombre va debajo, en su propio rótulo.
+
+   La media query es la única fuente de verdad de qué es "móvil": no hay
+   `matchMedia` en JavaScript y los dos mandos viven siempre en el DOM. */
+.game-pad {
+  display: none;
+}
+
+/* --- la marca, en el sitio que la consola de referencia da a la suya --- */
+.pad-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px;
+}
+/* El mismo rombo del encabezado, a escala de mando. */
+.pad-brand-mark {
+  width: 14px;
+  height: 14px;
+  background:
+    linear-gradient(45deg, var(--magenta) 0 50%, transparent 50%),
+    linear-gradient(-45deg, var(--cyan) 0 50%, transparent 50%);
+  background-blend-mode: screen;
+  box-shadow:
+    0 0 8px rgba(0, 245, 255, 0.55),
+    inset 0 0 4px rgba(255, 0, 110, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.pad-brand-text {
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+/* --- la receta de relieve, común a las tres familias de teclas ---
+   Una sola receta parametrizada con `--key`. En reposo, cara con volumen +
+   canto inferior + realce arriba; al pulsar, hundimiento, canto reducido,
+   realce invertido y halo. La cruceta conserva la cara oscura del tema; los
+   botones de acción y las pastillas van rellenos con `.is-filled`. */
+.pad-key {
+  --key: var(--cyan);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--key);
+  background: linear-gradient(#141420, #0a0a12);
+  color: var(--key);
+  font-family: var(--mono);
+  line-height: 1;
+  cursor: pointer;
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow:
+    /* el canto inferior: el borde físico de la tecla */
+    0 3px 0 0 color-mix(in srgb, var(--key) 24%, #05050a),
+    /* la sombra que la tecla proyecta sobre el cuerpo del mando */ 0 5px 8px
+      -2px rgba(0, 0, 0, 0.85),
+    /* el realce de la cara, arriba */ inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+  transition:
+    transform 90ms ease,
+    box-shadow 90ms ease;
+}
+.pad-key:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--key) 24%, #05050a),
+    0 2px 5px -2px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.14),
+    0 0 18px color-mix(in srgb, var(--key) 55%, transparent);
+}
+.pad-key:focus-visible {
+  outline: 2px solid var(--key);
+  outline-offset: 2px;
+}
+/* La tecla maciza: la misma pieza, pero pintada de su color en vez de llevarlo
+   solo en el borde. El canto y el realce se recalculan sobre ese color. Las
+   tres familias la comparten —cruceta, botones de acción y pastillas—, así que
+   todo el mando se lee como una sola pieza de plástico. */
+.pad-arm,
+.pad-round,
+.pad-pill {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--key) 82%, #ffffff),
+    var(--key)
+  );
+  border-color: color-mix(in srgb, var(--key) 55%, #000000);
+  /* Sobre una cara maciza el glifo no puede ir del color de la tecla: se
+     borraría. Va del negro del mueble, que es lo que lo hace legible. */
+  color: #05050a;
+  box-shadow:
+    0 3px 0 0 color-mix(in srgb, var(--key) 45%, #000000),
+    0 5px 8px -2px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+}
+.pad-arm:active,
+.pad-round:active,
+.pad-pill:active {
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--key) 45%, #000000),
+    0 2px 5px -2px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.4),
+    0 0 18px color-mix(in srgb, var(--key) 65%, transparent);
+}
+/* El destello. `overflow: hidden` de la tecla lo recorta a su silueta. */
+.pad-key::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--key) 65%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  pointer-events: none;
+}
+.pad-arm::after,
+.pad-round::after,
+.pad-pill::after {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.75),
+    transparent 70%
+  );
+}
+.pad-key:active::after {
+  animation: pad-flash 260ms ease-out;
+}
+@keyframes pad-flash {
+  from {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+/* Con movimiento reducido se quedan el hundimiento y el halo —la pulsación
+   sigue notándose— y desaparece solo la animación. */
+@media (prefers-reduced-motion: reduce) {
+  .pad-key {
+    transition: none;
+  }
+  .pad-key:active::after {
+    animation: none;
+  }
+}
+/* Lo que un juego no usa: misma silueta, apagada y sin respuesta. Son <span>,
+   así que no tienen rol, no reciben foco y `:active` no les llega. */
+.pad-key.is-off {
+  opacity: 0.3;
+  pointer-events: none;
+  cursor: default;
+}
+.pad-key.is-off::after {
+  display: none;
+}
+
+/* --- la tecla y su rótulo debajo ---
+   El nombre no va dentro del botón: va debajo, como el B/A/SELECT/START de la
+   consola real. Es decorativo (`aria-hidden`); quien usa lector de pantalla
+   oye el `aria-label` del botón. */
+.pad-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.pad-slot-label {
+  font-family: var(--pixel);
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* --- la cruceta: rejilla de 3 × 3, con el centro inerte --- */
+.pad-cross {
+  --key: var(--cyan);
+  --arm: clamp(38px, 10.6vw, 44px);
+  display: grid;
+  grid-template-columns: repeat(3, var(--arm));
+  grid-template-rows: repeat(3, var(--arm));
+  gap: 4px;
+}
+/* La flecha la pinta el CSS, no el JSX: es silueta, no contenido. Así el
+   mando no tiene ni un nodo de texto suelto en la cruceta. */
+.pad-arm {
+  font-size: 15px;
+  border-radius: 10px;
+}
+/* Acotadas a `.pad-arm` a propósito: `.pad-left`, `.pad-right` y `.pad-down`
+   son también las clases de los mandos de dentro del tubo (TETRIX, ASTEROIDES
+   y BUSCAMINAS), que ya llevan su flecha como texto. Sin el `.pad-arm`
+   delante, estas reglas les pintaban una segunda flecha encima. */
+.pad-arm::before {
+  content: "▲";
+  line-height: 1;
+}
+.pad-arm.pad-left::before {
+  content: "◀";
+}
+.pad-arm.pad-right::before {
+  content: "▶";
+}
+.pad-arm.pad-down::before {
+  content: "▼";
+}
+/* Las esquinas exteriores de la cruz, más redondeadas que las interiores. */
+.pad-cross .pad-up {
+  grid-area: 1 / 2;
+  border-radius: 14px 14px 10px 10px;
+}
+.pad-cross .pad-left {
+  grid-area: 2 / 1;
+  border-radius: 14px 10px 10px 14px;
+}
+.pad-cross .pad-right {
+  grid-area: 2 / 3;
+  border-radius: 10px 14px 14px 10px;
+}
+.pad-cross .pad-down {
+  grid-area: 3 / 2;
+  border-radius: 10px 10px 14px 14px;
+}
+/* El centro no es un quinto botón: es el cuerpo de la cruz, y lleva la misma
+   cara maciza que los brazos para que las cinco piezas se lean como una. */
+.pad-hub {
+  grid-area: 2 / 2;
+  /* Del mismo plástico que los brazos pero un punto más oscuro y hundido: es
+     el pivote de la cruz, no una quinta tecla, y tiene que leerse así. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--key) 72%, #000000),
+    color-mix(in srgb, var(--key) 88%, #000000)
+  );
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.22);
+}
+
+/* --- los dos botones de acción: lisos y en diagonal ---
+   B abajo a la izquierda y A arriba a la derecha, como en la consola de
+   referencia. Su cara no dice nunca lo que hacen: eso lo cuenta la leyenda de
+   dentro del tubo. */
+.pad-rounds {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+.pad-round {
+  --key: var(--magenta);
+  width: clamp(50px, 14.5vw, 58px);
+  height: clamp(50px, 14.5vw, 58px);
+  border-radius: 50%;
+}
+.pad-slot-a {
+  /* La diagonal de la consola: el botón principal, un escalón por encima. */
+  margin-bottom: 18px;
+}
+
+/* --- PAUSA y FIN, abajo del todo y en horizontal ---
+   El sitio que la consola de referencia reserva a SELECT y START: centradas
+   bajo la cruceta y los botones de acción, planas y una al lado de la otra. */
+.pad-mid {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 26px;
+  padding-top: 30px;
+}
+.pad-pill {
+  width: 52px;
+  height: 15px;
+  border-radius: 999px;
+}
+/* Las dos pastillas comparten el blanco del tema, el mismo del logotipo y del
+   nombre del jugador: lo que las distingue es su rótulo, no su color. */
+.pad-pause,
+.pad-end {
+  --key: var(--ink);
+}
+
+/* --- las dos bandas reservadas dentro del tubo ---
+   Señal arriba y leyenda justo debajo, las dos por encima del juego y dentro
+   del negro del tubo. Existen en el DOM en los dos viewports y solo se ven a
+   ≤ 720px: en escritorio manda la `.crt-bottom` de dentro de `.crt`. */
+.screen-signal,
+.screen-legend,
+.screen-stats {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 10px;
+  font-family: var(--pixel);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+}
+.screen-signal {
+  justify-content: space-between;
+  height: 20px;
+  border-bottom: 1px solid var(--line-2);
+}
+.screen-signal-title {
+  color: var(--ink-dim);
+}
+.screen-legend {
+  justify-content: center;
+  gap: 18px;
+  height: 24px;
+  border-bottom: 1px solid var(--line-2);
+}
+.screen-legend-empty {
+  color: var(--ink-faint);
+  opacity: 0.55;
+}
+.screen-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-dim);
+}
+.screen-legend .k {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 2px 3px;
+  border: 1px solid currentColor;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1;
+}
+.screen-legend .triple {
+  color: var(--rock-triple);
+}
+.screen-legend .shield {
+  color: var(--rock-shield);
+}
+.screen-legend .flag {
+  color: var(--magenta);
+}
+.screen-legend .mine {
+  color: var(--red);
+}
+
+/* --- la banda del marcador, debajo del juego ---
+   Los mismos tres números que el HUD y con sus mismos colores: puntuación en
+   cian, vidas en magenta y nivel en amarillo. En móvil el HUD se queda solo
+   con el nombre del jugador, así que estos son los únicos que se leen. */
+.screen-stats {
+  justify-content: space-around;
+  gap: 10px;
+  height: 24px;
+  border-top: 1px solid var(--line-2);
+}
+.screen-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+.screen-stat .l {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+}
+.screen-stat .v {
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  text-shadow: 0 0 6px rgba(0, 245, 255, 0.5);
+}
+.screen-stat.lives .v {
+  color: var(--magenta);
+  text-shadow: 0 0 6px rgba(255, 0, 110, 0.5);
+}
+.screen-stat.level .v {
+  color: var(--yellow);
+  text-shadow: 0 0 6px rgba(245, 255, 0, 0.5);
+}
+
 
 /* ===== TETRIX — escenario REAL dentro del CRT (SPEC 13) =====
    El tablero es un <canvas> a la izquierda y la columna derecha lleva la
@@ -1319,7 +1736,12 @@
   justify-content: center;
   gap: clamp(8px, 2%, 20px);
   padding: clamp(8px, 2%, 18px);
-  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
+  background: radial-gradient(
+    ellipse 45% 70% at 50% 50%,
+    #0a0030 0%,
+    #000 45%,
+    transparent 25%
+  );
 }
 /* La altura manda: el ancho sale de la proporción 10 × 20 del tablero. */
 .tetris-board {
@@ -1405,37 +1827,20 @@
   font-size: 12px;
 }
 
-/* En móvil la pantalla 4/3 deja la celda del tablero en 11.6px: se ve y no se
-   juega. Con 3/4 sube a ~20px. El modificador sólo se aplica cuando la pantalla
-   hospeda el tablero, así que la escena decorativa conserva su 4/3. */
+/* En móvil la cruceta y BAJAR se van al mando de abajo (SPEC 21) y la columna
+   se queda con SIGUIENTE. La proporción ya no se decide aquí: el escenario es
+   una banda 4 / 3 dentro del tubo, la misma en los cuatro juegos, y eso lo fija
+   el bloque del mueble más abajo. */
 @media (max-width: 720px) {
-  .crt-screen.tetris {
-    aspect-ratio: 3 / 4;
-  }
-  /* Con la columna de escritorio los botones quedan en 25px: demasiado poco
-     para un dedo. La columna se fija a 100px y es el tablero el que cede el
-     ancho, a costa de ~1px de celda: 19.9 → 18.6, por encima del mínimo. */
   .tetris-stage {
     gap: 8px;
   }
-  .tetris-side {
-    flex: 0 0 100px;
-    width: 100px;
-  }
+  /* La altura de la banda manda y el ancho sale de la proporción 10 × 20, como
+     en escritorio: así el tablero entra entero en un espacio 4 / 3. */
   .tetris-board {
-    height: auto;
-    max-height: 100%;
-    max-width: calc(100% - 108px);
-    /* Aquí el tablero no llena la altura (manda el ancho), así que se apoya
-       abajo para que su borde inferior siga coincidiendo con SIGUIENTE. */
-    align-self: flex-end;
-  }
-  .tetris-pad .btn {
-    aspect-ratio: auto;
-    height: 44px;
-  }
-  .tetris-pad .pad-drop {
-    height: 38px;
+    height: 100%;
+    width: auto;
+    align-self: center;
   }
 }
 
@@ -1450,7 +1855,7 @@
   align-items: center;
   justify-content: center;
   gap: clamp(8px, 2%, 20px);
-  padding: clamp(8px, 2%, 18px);
+  padding: clamp(8px, 10%, 18px);
   background: #000;
 }
 /* El lienzo tiene tamaño propio (800 × 600): con los dos máximos y las medidas
@@ -1561,42 +1966,13 @@
   color: var(--rock-shield);
 }
 
-/* A 390px la columna lateral dejaría el campo en 202 × 151: se ve y no se
-   juega. El escenario se apila, la pantalla pasa a 3/4 y los mandos bajan a una
-   fila con la cruceta a la izquierda y el fuego a la derecha. */
+/* En móvil el escenario ya no tiene columna lateral: los mandos y la leyenda
+   se van al mando de abajo (SPEC 21). El campo es 800 × 600, el mismo 4 : 3 del
+   tubo, así que recupera la proporción y llena la pantalla — que es justo lo
+   que la columna le robaba. El bloque del mueble le quita el relleno. */
 @media (max-width: 720px) {
-  .crt-screen.rocks {
-    aspect-ratio: 3 / 4;
-  }
   .rocks-stage {
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 8px;
-  }
-  .rocks-side {
-    flex-direction: row;
-    align-items: flex-end;
-    justify-content: space-between;
-    align-self: stretch;
-    width: 100%;
-    gap: 8px;
-  }
-  .rocks-block {
-    width: auto;
-  }
-  .rocks-pad {
-    width: 93px;
-  }
-  .rocks-pad .btn {
-    aspect-ratio: auto;
-    height: 44px;
-  }
-  .rocks-side .pad-fire {
-    height: 44px;
-    padding: 0 14px;
-  }
-  .rocks-objects {
-    align-items: flex-end;
+    gap: 0;
   }
 }
 
@@ -1613,7 +1989,12 @@
   justify-content: center;
   gap: clamp(8px, 2%, 20px);
   padding: clamp(8px, 2%, 18px);
-  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
+  background: radial-gradient(
+    ellipse 45% 70% at 50% 50%,
+    #0a0030 0%,
+    #000 45%,
+    transparent 25%
+  );
 }
 .minas-board {
   display: block;
@@ -1691,40 +2072,12 @@
   -webkit-user-select: none;
 }
 
-/* A 390px la columna lateral dejaría el campo en 202 × 151: se ve y no se
-   juega. El escenario se apila, la pantalla pasa a 3/4 y los mandos bajan a
-   una fila con la cruceta a la izquierda y REVELAR/MARCAR a la derecha. */
+/* En móvil la columna de la cruceta y REVELAR/MARCAR se va al mando de abajo
+   (SPEC 21). La rejilla es 576 × 432, exactamente el 4 : 3 del tubo, así que
+   recupera la proporción y llena la pantalla. */
 @media (max-width: 720px) {
-  .crt-screen.minas {
-    aspect-ratio: 3 / 4;
-  }
   .minas-stage {
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 8px;
-  }
-  .minas-side {
-    flex-direction: row;
-    align-items: flex-end;
-    justify-content: space-between;
-    align-self: stretch;
-    width: 100%;
-    gap: 8px;
-  }
-  .minas-block {
-    width: auto;
-  }
-  .minas-pad {
-    width: 93px;
-  }
-  .minas-pad .btn {
-    aspect-ratio: auto;
-    height: 44px;
-  }
-  .minas-side .pad-reveal,
-  .minas-side .pad-flag {
-    height: 44px;
-    padding: 0 14px;
+    gap: 0;
   }
 }
 
@@ -1906,7 +2259,12 @@
   justify-content: center;
   gap: clamp(6px, 1.5%, 14px);
   padding: clamp(6px, 1.5%, 14px);
-  background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
+  background: radial-gradient(
+    ellipse 45% 70% at 50% 50%,
+    #0a0030 0%,
+    #000 45%,
+    transparent 25%
+  );
 }
 /* La altura manda: el ancho sale de la proporción 4 / 3 del tablero. */
 .ark-board {
@@ -1943,11 +2301,8 @@
 .ark-pad .btn:focus-visible {
   opacity: 1;
 }
-@media (max-width: 720px) {
-  .ark-pad .btn {
-    min-height: 44px;
-  }
-}
+/* `.ark-pad` se oculta a ≤ 720px desde el bloque del mueble (SPEC 21): la fila
+   de ←/LANZAR/→ vive ahora en el mando de abajo. */
 
 /* ===== auth ===== */
 .av-auth-wrap {
@@ -2277,11 +2632,146 @@
     padding: 0 16px;
     margin: 24px auto;
   }
-  .av-player {
-    padding: 0 16px 32px;
-  }
-  .crt .fullscreen-toggle {
+  .hud-actions .fullscreen-toggle {
     display: inline-flex;
+  }
+
+  /* ===== el mueble de móvil: tubo arriba, mando soldado debajo (SPEC 21) =====
+     Todo el relleno posible vuelve al lienzo: 4px en el reproductor y 6px en
+     el mueble, con el radio del tubo a 14px. Si el resultado se ve apretado,
+     el ajuste es subir a 8-10px, no volver a 24px. */
+  .av-player {
+    padding: 0 4px 32px;
+  }
+  .crt {
+    padding: 6px;
+    /* Abajo no hay esquina: ahí empieza el mando. */
+    border-radius: 14px 14px 0 0;
+    /* Y tampoco hay anillo ni sombra: el recorte los corta justo en el borde
+       inferior, así que entre el tubo y el mando no queda ninguna junta. */
+    clip-path: inset(-8px -8px 0 -8px);
+    box-shadow:
+      0 0 0 6px #1b1b22,
+      0 0 0 7px #2a2a35;
+  }
+
+  /* El tubo deja de ser una proporción y pasa a ser tres bandas apiladas:
+     señal, leyenda y juego. La proporción se la queda el juego, que es lo que
+     tiene que medir igual en los cuatro. */
+  .crt-screen {
+    aspect-ratio: auto;
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px / 14px;
+  }
+  .screen-signal,
+  .screen-legend,
+  .screen-stats {
+    display: flex;
+  }
+  /* Los tres números bajan al tubo, debajo del juego: arriba se queda el
+     nombre del jugador y, en la otra punta de la fila, ⛶ y SALIR. */
+  .hud-stat.score,
+  .hud-stat.lives,
+  .hud-stat.level {
+    display: none;
+  }
+  /* El LED verde de escritorio se conserva tal cual: es parte de la identidad
+     del reproductor y aquí sigue abriendo la línea. */
+  .screen-signal .led {
+    font-size: 8px;
+  }
+
+  /* **El espacio del juego es idéntico en los cuatro.** Los escenarios dejan
+     de estar posicionados sobre todo el tubo y pasan a ser la última banda,
+     con el 4 : 3 puesto aquí y no en `.crt-screen`. TETRIX pierde el 3 / 4 que
+     tenía para sí solo: a cambio, los cuatro miden lo mismo a la misma
+     resolución, que es lo que se pidió. */
+  .tetris-stage,
+  .rocks-stage,
+  .ark-stage,
+  .minas-stage {
+    position: relative;
+    inset: auto;
+    flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    /* Sin estas dos, el tablero de TETRIX —que es 10 × 20— estira su banda y
+       el 4 / 3 deja de valer: la proporción la manda la banda, y lo que no
+       entre se escala dentro. */
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* La franja de dentro del tubo desaparece: su información sube a la banda de
+     señal, dentro del negro, y el mando cierra el mueble por abajo. */
+  .crt-bottom-desktop {
+    display: none;
+  }
+
+  /* El mando: mismo cuerpo, mismo negro y los mismos anillos que `.crt`, con
+     el radio solo en las esquinas de abajo. Es él quien cierra el mueble y
+     quien lleva la sombra proyectada de todo el conjunto. Tres filas: marca,
+     controles y la fila de PAUSA/FIN. */
+  .game-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px;
+    background: #050507;
+    border-radius: 0 0 14px 14px;
+    clip-path: inset(0 -8px -8px -8px);
+    box-shadow:
+      0 0 0 6px #1b1b22,
+      0 0 0 7px #2a2a35,
+      0 30px 80px -20px rgba(0, 245, 255, 0.35);
+  }
+  /* Cruceta a la izquierda y botones de acción a la derecha, separados por el
+     hueco que en la consola de referencia queda vacío. */
+  .pad-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  /* Los mandos de dentro del tubo, los cuatro, fuera: en móvil el mando es el
+     de abajo y el lienzo se queda con toda la pantalla. No se desmontan con
+     JavaScript —serían una segunda fuente de verdad sobre qué es "móvil"—, y
+     Playwright no ve lo que está en `display: none`. */
+  .tetris-side > .tetris-block:not(.tetris-next),
+  .rocks-side,
+  .minas-side,
+  .ark-pad {
+    display: none;
+  }
+  /* A TETRIX le queda una columna estrecha con solo SIGUIENTE, que es estado
+     del juego y no un control: por eso no pertenece al mando. */
+  .tetris-side {
+    flex: 0 0 52px;
+    width: 52px;
+  }
+  /* A 8px el rótulo mide 83px y se derrama sobre el tablero: en una columna
+     estrecha tiene que encoger. */
+  .tetris-side .l {
+    font-size: 6px;
+    letter-spacing: 0.08em;
+  }
+  .tetris-board {
+    max-width: calc(100% - 60px);
+  }
+  /* ASTEROIDES (800 × 600) y BUSCAMINAS (576 × 432) son exactamente 4 : 3, así
+     que su lienzo llena la banda entera sin relleno que se lo coma. */
+  .rocks-stage,
+  .minas-stage {
+    padding: 0;
+  }
+
+  /* PAUSA y FIN se van del HUD porque ya viven en el mando; arriba quedan ⛶ y
+     SALIR, los dos únicos controles de la fila. */
+  .hud-pause,
+  .hud-end {
+    display: none;
   }
 }
 

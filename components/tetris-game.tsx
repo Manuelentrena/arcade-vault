@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  type PointerEvent,
+  type Ref,
+} from "react";
+import type { PadAction, PadHandle } from "@/components/game-player";
 import {
   COLS,
   ROWS,
@@ -78,6 +86,8 @@ type TetrisGameProps = {
   initialLives: number;
   /** Tope de nivel real (`games.niveles`); null = sin tope. */
   maxLevel: number | null;
+  /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
+  padRef: Ref<PadHandle>;
 };
 
 export function TetrisGame({
@@ -87,6 +97,7 @@ export function TetrisGame({
   onOver,
   initialLives,
   maxLevel,
+  padRef,
 }: TetrisGameProps) {
   const boardRef = useRef<HTMLCanvasElement | null>(null);
   const nextRef = useRef<HTMLCanvasElement | null>(null);
@@ -366,6 +377,40 @@ export function TetrisGame({
     [act, stopRepeat],
   );
 
+  /**
+   * El mando de móvil (SPEC 21) entra por el mismo `press`/`stopRepeat` que la
+   * cruceta de dentro del tubo: nada de lógica de entrada nueva, y la guarda de
+   * `act` sigue descartando una pulsación que llegue antes del bucle.
+   */
+  useImperativeHandle(
+    padRef,
+    () => ({
+      press: (action: PadAction) => {
+        switch (action) {
+          case "up":
+            press(rotate, false);
+            break;
+          case "down":
+            press(softDrop, true);
+            break;
+          case "left":
+            press((s) => move(s, -1), true);
+            break;
+          case "right":
+            press((s) => move(s, 1), true);
+            break;
+          case "a":
+            press(hardDrop, false);
+            break;
+          default:
+            break;
+        }
+      },
+      release: stopRepeat,
+    }),
+    [press, stopRepeat],
+  );
+
   const padProps = (action: (state: TetrisState) => void, repeat: boolean) => ({
     type: "button" as const,
     className: "btn",
@@ -379,70 +424,79 @@ export function TetrisGame({
   });
 
   return (
-    <div className="tetris-stage">
-      <canvas
-        ref={boardRef}
-        className="tetris-board"
-        width={COLS * BLOCK}
-        height={ROWS * BLOCK}
-        role="img"
-        aria-label="Tablero de TETRIX"
-      />
-      <div className="tetris-side">
-        <div className="tetris-block">
-          <span className="l">MOVIMIENTO</span>
-          <div className="tetris-pad">
+    <>
+      {/* Banda de leyenda, dentro del tubo y encima del tablero: la reservan
+          los cuatro juegos por igual. TETRIX no tiene nada que explicar ahí
+          —la pieza siguiente es un lienzo, no un texto—, así que muestra el
+          rótulo vacío. Solo se ve a ≤ 720px (SPEC 21). */}
+      <div className="screen-legend">
+        <span className="screen-legend-empty">LEYENDA</span>
+      </div>
+      <div className="tetris-stage">
+        <canvas
+          ref={boardRef}
+          className="tetris-board"
+          width={COLS * BLOCK}
+          height={ROWS * BLOCK}
+          role="img"
+          aria-label="Tablero de TETRIX"
+        />
+        <div className="tetris-side">
+          <div className="tetris-block">
+            <span className="l">MOVIMIENTO</span>
+            <div className="tetris-pad">
+              <button
+                {...padProps(rotate, false)}
+                className="btn pad-rot"
+                aria-label="Rotar la pieza"
+              >
+                ↻
+              </button>
+              <button
+                {...padProps((s) => move(s, -1), true)}
+                className="btn pad-left"
+                aria-label="Mover a la izquierda"
+              >
+                ←
+              </button>
+              <button
+                {...padProps(softDrop, true)}
+                className="btn pad-down"
+                aria-label="Bajar más rápido"
+              >
+                ↓
+              </button>
+              <button
+                {...padProps((s) => move(s, 1), true)}
+                className="btn pad-right"
+                aria-label="Mover a la derecha"
+              >
+                →
+              </button>
+            </div>
+          </div>
+          <div className="tetris-block">
+            <span className="l">BAJAR</span>
             <button
-              {...padProps(rotate, false)}
-              className="btn pad-rot"
-              aria-label="Rotar la pieza"
+              {...padProps(hardDrop, false)}
+              className="btn magenta pad-drop"
+              aria-label="Caída instantánea"
             >
-              ↻
-            </button>
-            <button
-              {...padProps((s) => move(s, -1), true)}
-              className="btn pad-left"
-              aria-label="Mover a la izquierda"
-            >
-              ←
-            </button>
-            <button
-              {...padProps(softDrop, true)}
-              className="btn pad-down"
-              aria-label="Bajar más rápido"
-            >
-              ↓
-            </button>
-            <button
-              {...padProps((s) => move(s, 1), true)}
-              className="btn pad-right"
-              aria-label="Mover a la derecha"
-            >
-              →
+              ▼▼
             </button>
           </div>
-        </div>
-        <div className="tetris-block">
-          <span className="l">BAJAR</span>
-          <button
-            {...padProps(hardDrop, false)}
-            className="btn magenta pad-drop"
-            aria-label="Caída instantánea"
-          >
-            ▼▼
-          </button>
-        </div>
-        <div className="tetris-block tetris-next">
-          <span className="l">SIGUIENTE</span>
-          <canvas
-            ref={nextRef}
-            width={NEXT_CELLS * BLOCK}
-            height={NEXT_CELLS * BLOCK}
-            role="img"
-            aria-label="Pieza siguiente"
-          />
+          <div className="tetris-block tetris-next">
+            <span className="l">SIGUIENTE</span>
+            <canvas
+              ref={nextRef}
+              width={NEXT_CELLS * BLOCK}
+              height={NEXT_CELLS * BLOCK}
+              role="img"
+              aria-label="Pieza siguiente"
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

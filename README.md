@@ -482,6 +482,42 @@ npx skills@latest add Klerith/fernando-skills
 | [18 — Guardado real de puntuaciones en `scores`](specs/18-guardado-real-de-puntuaciones.md)                        | Implementado | SPEC 07, SPEC 16, SPEC 17                   |
 | [19 — Pantalla completa en el reproductor, solo en móvil](specs/19-pantalla-completa-movil.md)                     | Implementado | SPEC 12, SPEC 13, SPEC 14, SPEC 15, SPEC 18 |
 | [20 — BUSCAMINAS: cuarto motor jugable](specs/20-buscaminas-motor-jugable.md)                                      | Implementado | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19     |
+| [21 — Mando de consola en móvil: los controles salen del CRT](specs/21-interfaz-mando-movil.md)                    | Implementado | SPEC 12, 13, 14, 15, 19, 20                 |
+
+## Deuda conocida
+
+Cosas detectadas y **no** arregladas, cada una porque cae fuera del alcance de la spec en la que
+aparecieron. Van aquí para que la siguiente las recoja, no para que se olviden.
+
+### El catálogo no tiene un orden determinista (detectado en la SPEC 21)
+
+`getGames()` (`lib/supabase/games.ts`) ordena con `.order("created_at")` y **sin desempate**. Los tres
+primeros juegos entraron en un único `insert` de la misma migración, así que comparten un único `now()`:
+
+```
+ slug       |          created_at
+ asteroides | 2026-09-29 11:12:14.298547+00   ← las tres, el mismo valor
+ arkanoid   | 2026-09-29 11:12:14.298547+00
+ tetrix     | 2026-09-29 11:12:14.298547+00
+ buscaminas | 2026-09-29 11:12:14.453316+00   ← migración aparte, fecha propia
+```
+
+Con el empate, Postgres devuelve esas tres filas en un orden arbitrario que cambia entre reconstrucciones
+de la base. Eso mueve las tarjetas de `/biblioteca`, el carril de `/` y las pestañas de `/salon`, y deja
+**cinco pruebas rojas de forma permanente**: `home › el carril enlaza al detalle de cada juego`, las
+capturas `home` y `biblioteca` en `mobile`, y las dos de `salón de la fama`. La firma que lo confirma es
+que **`BUSCAMINAS` nunca se mueve**: es la única fila con fecha propia.
+
+No se arregló en la SPEC 21 porque el arreglo —un desempate en la consulta, o una columna `orden` en
+`public.games`— **cambia el orden del catálogo en toda la aplicación** y obliga a regenerar capturas que
+esa spec se comprometió a no tocar. Es una decisión de producto, no una errata: qué orden quiere verse en
+la biblioteca es algo que hay que decidir, no deducir.
+
+### El registro por correo falla al confirmar (anterior a la SPEC 21)
+
+`registro por correo › el enlace de Mailpit confirma la cuenta y deja dentro` termina en
+`/auth?error=confirm` en los dos proyectos. Se reprodujo también sobre `main` limpio, así que no lo
+introdujo ninguna spec reciente. Sin diagnosticar.
 
 ## Referencias
 

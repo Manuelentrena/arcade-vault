@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  type PointerEvent,
+  type Ref,
+} from "react";
+import type { PadAction, PadHandle } from "@/components/game-player";
 import {
   BURST_MS,
   HEIGHT,
@@ -56,6 +64,8 @@ type ArkanoidGameProps = {
   initialLives: number;
   /** Tope de nivel real (`games.niveles`); ARKANOID no lo usa (sin tope). */
   maxLevel: number | null;
+  /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
+  padRef: Ref<PadHandle>;
 };
 
 export function ArkanoidGame({
@@ -64,6 +74,7 @@ export function ArkanoidGame({
   onRun,
   onOver,
   initialLives,
+  padRef,
 }: ArkanoidGameProps) {
   const boardRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -335,6 +346,33 @@ export function ArkanoidGame({
     [aim, paused],
   );
 
+  /**
+   * El mando de móvil (SPEC 21) escribe el mismo `heldRef` que los botones de
+   * dentro del tubo y llama al mismo `serve(state)` que LANZAR. `up`, `down` y
+   * `b` no existen en ARKANOID: el mando los pinta apagados.
+   */
+  useImperativeHandle(
+    padRef,
+    () => ({
+      press: (action: PadAction) => {
+        if (action === "left" || action === "right") {
+          heldRef.current[action] = true;
+          return;
+        }
+        if (action !== "a") return;
+        const state = stateRef.current;
+        if (!state || paused || state.over) return;
+        serve(state);
+      },
+      release: (action: PadAction) => {
+        if (action === "left" || action === "right") {
+          heldRef.current[action] = false;
+        }
+      },
+    }),
+    [paused],
+  );
+
   /** Los dos botones de dirección se mantienen pulsados, como las flechas. */
   const holdProps = (side: "left" | "right") => ({
     type: "button" as const,
@@ -355,41 +393,51 @@ export function ArkanoidGame({
   });
 
   return (
-    <div className="ark-stage">
-      <canvas
-        ref={boardRef}
-        className="ark-board"
-        width={WIDTH}
-        height={HEIGHT}
-        role="img"
-        aria-label="Tablero de ARKANOID"
-        onPointerDown={onPointerDown}
-        onPointerMove={aim}
-      />
-      <div className="ark-pad">
-        <button
-          {...holdProps("left")}
-          aria-label="Mover la pala a la izquierda"
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          className="btn"
-          aria-label="Lanzar la bola"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            const state = stateRef.current;
-            if (!state || paused || state.over) return;
-            serve(state);
-          }}
-        >
-          LANZAR
-        </button>
-        <button {...holdProps("right")} aria-label="Mover la pala a la derecha">
-          →
-        </button>
+    <>
+      {/* Banda de leyenda: ARKANOID no tiene nada que explicar ahí —el muro se
+          lee solo—, así que muestra el rótulo vacío, como TETRIX. */}
+      <div className="screen-legend">
+        <span className="screen-legend-empty">LEYENDA</span>
       </div>
-    </div>
+      <div className="ark-stage">
+        <canvas
+          ref={boardRef}
+          className="ark-board"
+          width={WIDTH}
+          height={HEIGHT}
+          role="img"
+          aria-label="Tablero de ARKANOID"
+          onPointerDown={onPointerDown}
+          onPointerMove={aim}
+        />
+        <div className="ark-pad">
+          <button
+            {...holdProps("left")}
+            aria-label="Mover la pala a la izquierda"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            className="btn"
+            aria-label="Lanzar la bola"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              const state = stateRef.current;
+              if (!state || paused || state.over) return;
+              serve(state);
+            }}
+          >
+            LANZAR
+          </button>
+          <button
+            {...holdProps("right")}
+            aria-label="Mover la pala a la derecha"
+          >
+            →
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
