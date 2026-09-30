@@ -99,6 +99,32 @@ function scoreOf(text: string): number {
   return Number(text.replace(/\D/g, ""));
 }
 
+/**
+ * Termina una partida de ARKANOID de verdad. Desde la SPEC 22 no hay ningún
+ * botón que mate la partida —`FIN` pasó a ser `MENÚ`, que es reanudable—, así
+ * que el único camino al panel de fin es quedarse sin vidas.
+ *
+ * ARKANOID es el juego donde eso es determinista y corto: con la pala quieta,
+ * el saque de 30° no vuelve nunca a ella y cada bola se pierde a los 3,6s, así
+ * que las tres vidas se agotan en unos 11s con 30 puntos en el marcador. Cada
+ * vida nueva vuelve al saque, y el saque lo pide el jugador: de ahí el Space
+ * repetido. No se toca la pala a propósito.
+ */
+async function loseArkanoid(page: Page) {
+  const panel = page.getByRole("dialog");
+  await expect(page.locator(".ark-board")).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        if (await panel.isVisible()) return true;
+        await page.keyboard.press("Space");
+        return false;
+      },
+      { timeout: 45_000, intervals: [500] },
+    )
+    .toBe(true);
+}
+
 /** Credenciales del usuario que siembra supabase/seed.sql. */
 const SEED_EMAIL = "px_kai@vault.test";
 const SEED_PASSWORD = "arcade-vault-test";
@@ -396,7 +422,7 @@ test.describe("detalle", () => {
 });
 
 test.describe("reproductor", () => {
-  /** Un hard drop en TETRIX puntúa al instante: sirve para llegar a FIN con algo. */
+  /** Un hard drop en TETRIX puntúa al instante: sirve para abrir el panel con algo. */
   async function scoreSomething(page: Page) {
     await page.keyboard.press("Space");
     const score = page.locator(".hud-stat").nth(1).locator(".v");
@@ -416,7 +442,7 @@ test.describe("reproductor", () => {
    * el que puntuara menos no superaría la marca que acaba de guardar el otro
    * y GUARDAR PUNTUACIÓN nunca aparecería. No es una diferencia de viewport.
    */
-  test("FIN abre el modal y la primera puntuación se guarda como récord", async ({
+  test("quedarse sin vidas abre el panel y la primera puntuación se guarda como récord", async ({
     page,
     isMobile,
   }) => {
@@ -424,27 +450,34 @@ test.describe("reproductor", () => {
       isMobile,
       "compite por la misma cuenta y el mismo juego que desktop",
     );
+    // Perder las tres vidas cuesta ~11s de reloj real: sin esto el margen que
+    // queda para el guardado y la vuelta a la ficha es demasiado justo.
+    test.slow();
     await signIn(page);
     await page.goto("/jugar/arkanoid");
-    await expect(page.locator(".ark-board")).toBeVisible();
-    const score = page.locator(".hud-stat").nth(1).locator(".v");
-    await page.keyboard.press("Space");
-    await expect
-      .poll(async () => scoreOf(await score.innerText()), { timeout: 15000 })
-      .toBeGreaterThan(0);
-    await page.getByRole("button", { name: "FIN" }).click();
+    await loseArkanoid(page);
 
-    const modal = page.getByRole("dialog");
-    await expect(modal).toBeVisible();
-    await expect(modal.locator("h2")).toHaveText("FIN DEL JUEGO");
+    const panel = page.getByRole("dialog");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("h2")).toHaveText("FIN DEL JUEGO");
+    // El panel vive dentro del tubo, no encima de la página (SPEC 22).
+    await expect(page.locator(".crt-screen .crt-menu")).toHaveCount(1);
+    await expect(page.locator(".modal-bd")).toHaveCount(0);
+    // Con la partida terminada no hay vuelta: CONTINUAR no existe en ningún
+    // estado del panel, y aquí tampoco el botón que lo abriría.
+    await expect(panel.getByRole("button", { name: "CONTINUAR" })).toHaveCount(
+      0,
+    );
 
-    // El nombre no se edita: es el de la sesión y se pinta tal cual.
-    await expect(modal.locator("input")).toHaveCount(0);
-    await expect(modal.locator(".modal-player .v")).toHaveText("PX_KAI");
+    // El nombre no se edita ni se repite: ya está en el HUD, no en el panel.
+    await expect(panel.locator("input")).toHaveCount(0);
+    await expect(page.locator(".player-hud .hud-stat.player .v")).toHaveText(
+      "PX_KAI",
+    );
 
     // Primera vez que PX_KAI juega ARKANOID en esta base: sin marca previa,
     // cuenta como récord y save_score inserta de verdad en `scores`.
-    await modal.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }).click();
+    await panel.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }).click();
     await expect(page.locator(".toast-saved")).toContainText(
       "¡NUEVA MARCA PERSONAL!",
     );
@@ -454,13 +487,13 @@ test.describe("reproductor", () => {
     await expect(page.locator(".lb-row").first()).toContainText("PX_KAI");
   });
 
-  test("JUGAR DE NUEVO reinicia la partida", async ({ page }) => {
+  test("REINICIAR reinicia la partida", async ({ page }) => {
     await signIn(page);
     await page.goto("/jugar/tetrix");
     await expect(page.locator(".tetris-board")).toBeVisible();
     await scoreSomething(page);
-    await page.getByRole("button", { name: "FIN" }).click();
-    await page.getByRole("button", { name: "JUGAR DE NUEVO" }).click();
+    await page.getByRole("button", { name: "MENÚ", exact: true }).click();
+    await page.getByRole("button", { name: "REINICIAR" }).click();
 
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.locator(".hud-stat").nth(1).locator(".v")).toHaveText(
@@ -468,6 +501,108 @@ test.describe("reproductor", () => {
     );
     await expect(page.locator(".hud-stat.level .v")).toHaveText("01");
     await expect(page.getByRole("button", { name: "PAUSA" })).toBeVisible();
+  });
+
+  /**
+   * SPEC 22: MENÚ es un interruptor, no un `FIN` con otro nombre. Abrirlo
+   * congela la partida y volver a pulsarlo la devuelve entera — por eso el
+   * panel no tiene CONTINUAR.
+   */
+  test("MENÚ abre y cierra el panel sin costar la partida", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    await scoreSomething(page);
+    const score = page.locator(".hud-stat").nth(1).locator(".v");
+    const antes = scoreOf(await score.innerText());
+
+    const menu = page.getByRole("button", { name: "MENÚ", exact: true });
+    await menu.click();
+    const panel = page.getByRole("dialog");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("h2")).toHaveText("MENÚ");
+    await expect(panel.getByRole("button", { name: "CONTINUAR" })).toHaveCount(
+      0,
+    );
+
+    await menu.click();
+    await expect(panel).toBeHidden();
+    expect(scoreOf(await score.innerText())).toBe(antes);
+  });
+
+  test("con la partida viva el panel no ofrece ninguna forma de guardar", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    await scoreSomething(page);
+    await page.getByRole("button", { name: "MENÚ", exact: true }).click();
+
+    const panel = page.locator(".crt-menu");
+    await expect(panel).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }),
+    ).toHaveCount(0);
+    await expect(panel.locator(".guest-save")).toHaveCount(0);
+    await expect(panel.locator(".no-record")).toHaveCount(0);
+    await expect(panel.locator(".toast-saved")).toHaveCount(0);
+    // Y las dos únicas opciones son las mismas que en el fin de partida.
+    await expect(panel.locator(".crt-menu-actions > *")).toHaveText([
+      "REINICIAR",
+      "SALIR",
+    ]);
+  });
+
+  test("Esc cierra el menú pero no el fin de partida", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "Esc es un atajo de teclado, no del mando");
+    test.slow(); // la segunda mitad pierde una partida de ARKANOID entera
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+
+    const panel = page.getByRole("dialog");
+    await page.getByRole("button", { name: "MENÚ", exact: true }).click();
+    await expect(panel).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+
+    // El fin de partida no se descarta con una tecla: debajo no hay partida.
+    await page.goto("/jugar/arkanoid");
+    await loseArkanoid(page);
+    await expect(panel).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeVisible();
+  });
+
+  test("PAUSA y MENÚ se excluyen y el que no toca se ve desactivado", async ({
+    page,
+    isMobile,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+    // En móvil los dos mandos viven en el mando, no en el HUD (SPEC 21).
+    const raiz = isMobile
+      ? page.locator(".game-pad")
+      : page.locator(".hud-actions");
+    const pausa = raiz.getByRole("button", { name: "PAUSA" });
+    const menu = raiz.getByRole("button", { name: "MENÚ" });
+
+    await menu.click();
+    await expect(pausa).toBeDisabled();
+    await menu.click();
+    await expect(pausa).toBeEnabled();
+
+    await pausa.click();
+    await expect(menu).toBeDisabled();
+    await raiz.getByRole("button", { name: "REANUDAR" }).click();
+    await expect(menu).toBeEnabled();
   });
 
   test("un id desconocido devuelve 404", async ({ page }) => {
@@ -481,67 +616,61 @@ test.describe("reproductor", () => {
   });
 
   /**
-   * SPEC 19: el botón de pantalla completa solo tiene sentido en móvil, donde
-   * hay barra del navegador que ocultar. Ya no flota sobre el CRT: con PAUSA y
-   * FIN en el mando (SPEC 21) cabe en .hud-actions junto a SALIR. No se fuerza
-   * una entrada real a pantalla completa: la API
-   * depende de un gesto de usuario y de una pantalla real, y su
-   * comportamiento en Chromium headless es menos fiable que el resto de la
-   * suite.
+   * SPEC 19, y desde la SPEC 22 en los dos viewports: la pantalla completa no
+   * solo quita la barra del navegador de móvil, también el nav y el pie, y el
+   * tubo gana ese alto igual en escritorio. Vive en `.hud-actions`, a la
+   * derecha de MENÚ. No se fuerza una entrada real: la API depende de un gesto
+   * de usuario y de una pantalla real, y su comportamiento en Chromium
+   * headless es menos fiable que el resto de la suite.
    */
-  test("el botón de pantalla completa solo existe en móvil", async ({
+  test("el botón de pantalla completa existe en los dos viewports", async ({
     page,
-    isMobile,
   }) => {
     await signIn(page);
     await page.goto("/jugar/tetrix");
-    const toggle = page.getByRole("button", {
-      name: "Activar pantalla completa",
-    });
-    if (isMobile) {
-      await expect(toggle).toBeVisible();
-    } else {
-      // Existe en el DOM (la detección de soporte no depende del viewport)
-      // pero el CSS lo oculta por debajo de 720px, igual que .hamburger.
-      await expect(toggle).toBeHidden();
-    }
+    await expect(
+      page.getByRole("button", { name: "Activar pantalla completa" }),
+    ).toBeVisible();
   });
 });
 
 test.describe("fin de partida como invitado", () => {
-  test("el modal pide entrar y lleva a /auth con la puntuación", async ({
+  test("el panel pide entrar y lleva a /auth con la puntuación", async ({
     page,
   }) => {
-    await playAsGuest(page, "/jugar/tetrix");
-    await expect(page.locator(".tetris-board")).toBeVisible();
-    await page.keyboard.press("Space");
-    await expect
-      .poll(async () =>
-        scoreOf(
-          await page.locator(".hud-stat").nth(1).locator(".v").innerText(),
-        ),
-      )
-      .toBeGreaterThan(0);
+    test.slow(); // perder las tres vidas de ARKANOID cuesta ~11s
+    // ARKANOID y no TETRIX: un invitado no guarda nada, así que no compite por
+    // ningún récord, y aquí hace falta un fin de partida de verdad — desde la
+    // SPEC 22 ningún botón mata la partida.
+    await playAsGuest(page, "/jugar/arkanoid");
+    await loseArkanoid(page);
 
-    await page.getByRole("button", { name: "FIN" }).click();
-    const modal = page.getByRole("dialog");
-    await expect(modal).toBeVisible();
+    const panel = page.getByRole("dialog");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("h2")).toHaveText("FIN DEL JUEGO");
 
     // Ni input de nombre ni guardado directo: primero hay que tener cuenta.
-    await expect(modal.locator("input")).toHaveCount(0);
-    await expect(modal.locator(".modal-player .v")).toHaveText("INVITADO");
+    await expect(panel.locator("input")).toHaveCount(0);
+    // El nombre ya no se repite en el panel: vive en el HUD, y de un invitado
+    // se pinta INVITADO, nunca su nombre técnico.
+    await expect(panel.locator(".modal-player")).toHaveCount(0);
+    await expect(page.locator(".player-hud .hud-stat.player .v")).toHaveText(
+      "INVITADO",
+    );
     await expect(
-      modal.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }),
+      panel.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }),
     ).toHaveCount(0);
-    await expect(modal.locator(".guest-save p")).toContainText("invitado");
+    await expect(panel.locator(".guest-save p")).toHaveText(
+      "Inicia sesión para guardar esta puntuación.",
+    );
 
-    await modal
+    await panel
       .getByRole("button", { name: "INICIAR SESIÓN PARA GUARDAR" })
       .click();
 
     // La partida viaja en el `next` para volver a la misma pantalla con ella.
     await expect(page).toHaveURL(
-      /\/auth\?next=%2Fjugar%2Ftetrix%3Fpuntuacion%3D\d+%26nivel%3D\d+/,
+      /\/auth\?next=%2Fjugar%2Farkanoid%3Fpuntuacion%3D\d+%26nivel%3D\d+/,
       { timeout: NAV_TIMEOUT },
     );
   });
@@ -569,9 +698,13 @@ test.describe("fin de partida como invitado", () => {
     await signIn(page);
     await page.goto(`/jugar/asteroides?puntuacion=${puntuacion}&nivel=3`);
 
-    const modal = page.getByRole("dialog");
-    await expect(modal).toBeVisible();
-    await expect(modal.locator(".final")).toHaveText(formateada);
+    const panel = page.getByRole("dialog");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator(".final")).toHaveText(formateada);
+    // Vuelve en estado fin de partida, dentro del tubo.
+    await expect(page.locator(".crt-screen .crt-menu h2")).toHaveText(
+      "FIN DEL JUEGO",
+    );
     // Primera vez que PX_KAI juega ASTEROIDES: sin marca previa, se
     // autoguarda como récord sin que el jugador pulse nada.
     await expect(page.locator(".toast-saved")).toContainText(
@@ -903,10 +1036,9 @@ test.describe("arkanoid", () => {
     expect(botonesArkanoid).toEqual(botonesTetrix);
     expect(botonesArkanoid).toEqual(botonesBuscaminas);
     // La fila cambia de contenido con el viewport, no con el juego: en móvil
-    // PAUSA y FIN bajan al mando y sube ⛶ desde el CRT (SPEC 21).
-    expect(botonesArkanoid).toEqual(
-      isMobile ? ["⛶", "SALIR"] : ["PAUSA", "FIN", "SALIR"],
-    );
+    // PAUSA y MENÚ bajan al mando (SPEC 21). SALIR salió del HUD y vive en el
+    // panel, y ⛶ está ahora en los dos viewports (SPEC 22).
+    expect(botonesArkanoid).toEqual(isMobile ? ["⛶"] : ["PAUSA", "MENÚ", "⛶"]);
   });
 });
 
@@ -1089,52 +1221,40 @@ test.describe("mando de consola en móvil", () => {
     }
   });
 
-  test("PAUSA y FIN viven en el mando, no en el HUD", async ({ page }) => {
+  test("PAUSA y MENÚ viven en el mando, no en el HUD", async ({ page }) => {
     await signIn(page);
     await page.goto("/jugar/tetrix");
-    await expect(page.locator(".game-pad")).toBeVisible();
+    const mando = page.locator(".game-pad");
+    await expect(mando).toBeVisible();
 
-    await expect(
-      page.locator(".game-pad").getByRole("button", { name: "PAUSA" }),
-    ).toBeVisible();
-    await expect(
-      page.locator(".game-pad").getByRole("button", { name: "FIN" }),
-    ).toBeVisible();
+    await expect(mando.getByRole("button", { name: "PAUSA" })).toBeVisible();
+    await expect(mando.getByRole("button", { name: "MENÚ" })).toBeVisible();
     await expect(page.locator(".hud-actions .hud-pause")).toBeHidden();
     await expect(page.locator(".hud-actions .hud-end")).toBeHidden();
 
     // Y hacen exactamente lo que hacían arriba.
-    await page
-      .locator(".game-pad")
-      .getByRole("button", { name: "PAUSA" })
-      .click();
+    await mando.getByRole("button", { name: "PAUSA" }).click();
     await expect(page.getByText("EN PAUSA")).toBeVisible();
-    await page
-      .locator(".game-pad")
-      .getByRole("button", { name: "REANUDAR" })
-      .click();
+    await mando.getByRole("button", { name: "REANUDAR" }).click();
     await expect(page.getByText("EN PAUSA")).toHaveCount(0);
-    await page
-      .locator(".game-pad")
-      .getByRole("button", { name: "FIN" })
-      .click();
+    await mando.getByRole("button", { name: "MENÚ" }).click();
+    // El panel se pinta dentro del tubo, encima del juego, no sobre la página.
+    await expect(page.locator(".crt-screen .crt-menu")).toBeVisible();
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 
-  test("el HUD se queda con ⛶ y SALIR, y nada más", async ({ page }) => {
+  test("el HUD se queda con ⛶ y nada más", async ({ page }) => {
     await signIn(page);
     await page.goto("/jugar/arkanoid");
     await expect(page.locator(".game-pad")).toBeVisible();
 
+    // SALIR salió del HUD en la SPEC 22: la única salida es la del panel.
     const visibles = page.locator(".hud-actions > *:visible");
-    await expect(visibles).toHaveCount(2);
+    await expect(visibles).toHaveCount(1);
     await expect(
       page.locator(".hud-actions").getByRole("button", {
         name: "Activar pantalla completa",
       }),
-    ).toBeVisible();
-    await expect(
-      page.locator(".hud-actions").getByRole("link", { name: "SALIR" }),
     ).toBeVisible();
   });
 
@@ -1162,7 +1282,7 @@ test.describe("mando de consola en móvil", () => {
         "B",
         "A",
         "PAUSA",
-        "FIN",
+        "MENÚ",
       ]);
       await expect(mando.locator(".pad-brand")).toHaveText("ARCADE VAULT");
 
@@ -1434,6 +1554,39 @@ test.describe("mando de consola en móvil", () => {
       await rejilla.screenshot().then((b) => b.toString("base64")),
     ).not.toBe(antesR);
   });
+
+  /**
+   * SPEC 22: el panel no se desplaza nunca. A 390px el tubo mide unos 300px y
+   * la rama más alta del panel es la de invitado en fin de partida —título,
+   * etiqueta, puntuación, la línea de sesión y tres botones—, así que es la
+   * única que hace falta medir: si esa cabe, caben las otras.
+   */
+  test("el panel cabe en el tubo sin desplazamiento", async ({ page }) => {
+    test.slow();
+    await playAsGuest(page, "/jugar/arkanoid");
+    await loseArkanoid(page);
+
+    const panel = page.locator(".crt-menu");
+    await expect(panel.locator(".guest-save")).toBeVisible();
+    const [scrollHeight, clientHeight] = await panel.evaluate((el) => [
+      el.scrollHeight,
+      el.clientHeight,
+    ]);
+    expect(scrollHeight).toBeLessThanOrEqual(clientHeight);
+  });
+
+  /** Y los cuatro botones del panel miden lo mismo, midan lo que midan sus rótulos. */
+  test("los botones del panel forman una sola columna", async ({ page }) => {
+    test.slow();
+    await playAsGuest(page, "/jugar/arkanoid");
+    await loseArkanoid(page);
+
+    const anchos = await page
+      .locator(".crt-menu .btn")
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+    expect(anchos.length).toBeGreaterThan(1);
+    expect(new Set(anchos).size).toBe(1);
+  });
 });
 
 /**
@@ -1481,13 +1634,16 @@ test.describe("el reproductor de escritorio no se entera del mando", () => {
     await expect(page.locator(".crt > .crt-bottom-desktop")).toHaveCount(1);
   });
 
-  test("PAUSA y FIN siguen en el HUD", async ({ page }) => {
+  test("PAUSA, MENÚ y ⛶ siguen en el HUD", async ({ page }) => {
     await signIn(page);
     await page.goto("/jugar/tetrix");
 
     await expect(page.locator(".hud-actions .hud-pause")).toBeVisible();
     await expect(page.locator(".hud-actions .hud-end")).toBeVisible();
-    await expect(page.locator(".hud-actions .fullscreen-toggle")).toBeHidden();
+    // Desde la SPEC 22 la pantalla completa también está aquí, a la derecha
+    // de MENÚ; el mando, en cambio, sigue sin existir por encima de 720px.
+    await expect(page.locator(".hud-actions .fullscreen-toggle")).toBeVisible();
+    await expect(page.locator(".game-pad")).toBeHidden();
   });
 });
 

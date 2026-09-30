@@ -288,6 +288,13 @@
     0 0 0 transparent,
     inset 0 0 0 transparent;
   cursor: pointer;
+  /* Ningún botón del sitio se selecciona al mantener el dedo encima: en el
+     reproductor eso dejaba el rótulo marcado en azul sobre el juego. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition:
     transform 80ms ease,
     box-shadow 160ms ease,
@@ -1214,16 +1221,13 @@
   display: flex;
   gap: 10px;
 }
-/* Solo tiene sentido ocultar la barra del navegador en móvil (SPEC 19); en
-   escritorio no hay barra que ocultar. Ya no flota sobre el CRT: con PAUSA y
-   FIN en el mando (SPEC 21) cabe en la fila del HUD junto a SALIR, y así deja
-   de tapar una esquina del lienzo.
-   Selector con el padre delante, igual que .av-nav .hamburger: con solo
-   .fullscreen-toggle, el orden de salida del build de CSS puede dejar el
-   display:inline-flex de .btn por encima de este display:none al empatar
-   en especificidad. */
+/* Ya no flota sobre el CRT: desde la SPEC 21 vive en la fila del HUD, a la
+   derecha de MENÚ, y así deja de tapar una esquina del lienzo. Tampoco se
+   esconde ya en escritorio: la barra del navegador no es lo único que la
+   pantalla completa quita —también el nav y el pie—, y el tubo gana el alto
+   de los dos. El botón solo desaparece donde el navegador no la soporta, y
+   eso lo decide el JSX, no el CSS. */
 .hud-actions .fullscreen-toggle {
-  display: none;
   padding: 12px 14px;
 }
 
@@ -1293,6 +1297,119 @@
   font-size: 12px;
   text-align: center;
 }
+/* ===== el panel del tubo (SPEC 22) =====
+   El menú y el fin de partida son el mismo panel con dos estados. Habla el
+   idioma de `.crt-content` —absoluto sobre el juego, columna centrada,
+   tipografía pixel— y se queda con el magenta que traía el modal viejo como
+   acento del título. Por encima del cartel de EN PAUSA (z-index 5), aunque
+   abrir el menú quita la pausa y los dos no llegan a coincidir.
+
+   Regla: el panel no se desplaza nunca. Cualquier línea que se le añada
+   obliga a volver a medir la rama más alta —invitado en fin de partida— en el
+   tubo de 390px. */
+.crt-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.78);
+}
+.crt-menu h2 {
+  margin: 0 0 14px;
+  font-family: var(--pixel);
+  font-size: 18px;
+  color: var(--magenta);
+  text-shadow: 0 0 12px rgba(255, 0, 110, 0.7);
+  letter-spacing: 0.12em;
+}
+.crt-menu .final-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  /* Un escalón más claro que el `--ink-faint` del modal viejo: aquí el fondo
+     es el negro del tubo y a 11px la palabra casi no se leía. */
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+.crt-menu .final {
+  margin-top: 6px;
+  font-family: var(--pixel);
+  font-size: 34px;
+  color: var(--yellow);
+  text-shadow: 0 0 16px rgba(245, 255, 0, 0.6);
+}
+/* La rama de guardado entera. Solo se monta con la partida terminada: en el
+   estado menú este contenedor no existe.
+
+   Ocupa todo el ancho del panel a propósito, aunque sus hijos vayan
+   centrados: es lo que deja que GUARDAR PUNTUACIÓN e INICIAR SESIÓN PARA
+   GUARDAR midan lo mismo que REINICIAR y SALIR. Con el contenedor ajustado a
+   su contenido, el botón medía lo que medía su texto y quedaba más corto que
+   las opciones de debajo en las resoluciones donde el rótulo no llegaba a los
+   260px. Las líneas de texto conservan sus propios `max-width`. */
+.crt-menu-save {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 14px;
+}
+.crt-menu-save .btn {
+  width: min(260px, 100%);
+}
+.crt-menu .guest-save {
+  width: 100%;
+}
+.crt-menu .toast-saved {
+  margin-top: 0;
+}
+.crt-menu .save-error {
+  margin-top: 8px;
+}
+.crt-menu .no-record {
+  margin: 0;
+}
+.crt-menu .guest-save {
+  gap: 12px;
+  margin-bottom: 0;
+}
+/* Las opciones, apiladas: una columna de botones tocables con el dedo, no una
+   fila que se parta en dos a 390px. */
+.crt-menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Mismo ancho que los botones de la rama de guardado: los cuatro botones
+     del panel forman una sola columna, midan lo que midan sus rótulos. */
+  width: min(260px, 100%);
+  margin-top: 18px;
+}
+.crt-menu-actions .btn {
+  width: 100%;
+  min-height: 38px;
+}
+
+/* PAUSA y MENÚ se excluyen: con el panel abierto no se pausa, y en pausa no se
+   abre el panel. El que no toca no se oculta —la fila no puede bailar—: se
+   pinta gris y sin neón, para que se vea desactivado antes de pulsarlo. El
+   0.4 de opacidad de `.btn:disabled` no bastaba sobre el amarillo y el
+   magenta, que seguían leyéndose como vivos. */
+.hud-actions .btn:disabled,
+.hud-actions .btn:disabled:hover {
+  opacity: 1;
+  color: var(--ink-faint);
+  border-color: var(--line);
+  background: transparent;
+  box-shadow: none;
+  text-shadow: none;
+  cursor: not-allowed;
+}
+
 .crt-bottom {
   display: flex;
   align-items: center;
@@ -1321,6 +1438,61 @@
   box-shadow: 0 0 6px var(--green);
 }
 
+/* ===== pantalla completa en escritorio =====
+   El botón ⛶ existe ahora también por encima de 720px, y ahí el reproductor
+   es ancho: a 1100px el tubo 4 / 3 mide 825px de alto y, con el HUD encima, no
+   cabe en la pantalla de ningún portátil. Fuera de la pantalla completa eso da
+   igual —la página se desplaza—, pero dentro de ella una barra de
+   desplazamiento no tiene sentido: lo que se pidió es justamente ver el juego
+   entero.
+
+   Así que en pantalla completa manda el alto, no el ancho. El reproductor pasa
+   a ser una columna que mide exactamente lo que la pantalla; el HUD se queda
+   con lo suyo y el tubo con todo el resto, y es el tubo el que deduce su ancho
+   de su alto para conservar el 4 / 3 —de ahí el `width: auto` y el
+   `align-items: center` que impide que el flex lo estire—. Nada desborda.
+
+   El mueble de móvil no entra aquí: a ≤ 720px el tubo ya manda sobre el ancho
+   de la pantalla y debajo va el mando, que es otro reparto (SPEC 21). */
+@media (min-width: 721px) {
+  .av-player:fullscreen {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 16px 24px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .av-player:fullscreen .player-hud {
+    flex: 0 0 auto;
+    margin-bottom: 12px;
+  }
+  .av-player:fullscreen .crt {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+  /* Alto definido por el flex, ancho deducido del `aspect-ratio`. El
+     `max-width` solo actúa en pantallas más anchas que altas hasta el
+     extremo, y ahí prefiere recortar a romper la caja. */
+  .av-player:fullscreen .crt-screen {
+    flex: 1 1 0;
+    min-height: 0;
+    width: auto;
+    max-width: 100%;
+  }
+  .av-player:fullscreen .crt-bottom {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
 /* ===== mando de consola de móvil (SPEC 21) =====
    El mando es hermano de `.crt` y el CSS lo suelda a él a ≤ 720px: mismo
    cuerpo, mismo negro, sin franja ni junta entre los dos, y es él quien cierra
@@ -1329,13 +1501,24 @@
 
    El dibujo sigue la consola de referencia: la marca arriba, la cruceta a la
    izquierda, los dos botones de acción a la derecha y en diagonal, y la fila
-   de PAUSA y FIN abajo del todo, centrada. Ninguna tecla lleva nada escrito
+   de PAUSA y MENÚ abajo del todo, centrada. Ninguna tecla lleva nada escrito
    dentro: el nombre va debajo, en su propio rótulo.
 
    La media query es la única fuente de verdad de qué es "móvil": no hay
    `matchMedia` en JavaScript y los dos mandos viven siempre en el DOM. */
 .game-pad {
   display: none;
+  /* Un mando de plástico no se selecciona. Sin esto, mantener el dedo sobre
+     una tecla acaba seleccionando el rótulo de debajo —la `A`, la `B`, la
+     flecha de la cruceta— o abriendo el menú contextual de iOS, y el juego se
+     queda con medio texto azul encima. Va en el contenedor y no en cada tecla
+     porque lo que se selecciona son precisamente los rótulos, que son
+     hermanos del botón, no hijos suyos. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 /* --- la marca, en el sitio que la consola de referencia da a la suya --- */
@@ -1388,6 +1571,7 @@
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   box-shadow:
     /* el canto inferior: el borde físico de la tecla */
     0 3px 0 0 color-mix(in srgb, var(--key) 24%, #05050a),
@@ -1600,7 +1784,7 @@
   margin-bottom: 18px;
 }
 
-/* --- PAUSA y FIN, abajo del todo y en horizontal ---
+/* --- PAUSA y MENÚ, abajo del todo y en horizontal ---
    El sitio que la consola de referencia reserva a SELECT y START: centradas
    bajo la cruceta y los botones de acción, planas y una al lado de la otra. */
 .pad-mid {
@@ -1618,8 +1802,22 @@
 /* Las dos pastillas comparten el blanco del tema, el mismo del logotipo y del
    nombre del jugador: lo que las distingue es su rótulo, no su color. */
 .pad-pause,
-.pad-end {
+.pad-menu {
   --key: var(--ink);
+}
+/* Desactivada: la tecla pierde el blanco y se queda del gris del mueble, y su
+   rótulo se apaga con ella. Sigue ocupando su sitio —la silueta del mando es
+   la misma en los cuatro juegos y en todos los estados—, solo que apagada. */
+.pad-pill:disabled {
+  --key: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.pad-pill:disabled::after {
+  display: none;
+}
+.pad-slot.is-disabled .pad-slot-label {
+  opacity: 0.45;
 }
 
 /* --- las dos bandas reservadas dentro del tubo ---
@@ -2081,103 +2279,9 @@
   }
 }
 
-/* game over modal */
-.modal-bd {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-.modal {
-  width: min(480px, 96vw);
-  background: var(--bg-2);
-  border: 1px solid var(--magenta);
-  box-shadow:
-    0 0 30px rgba(255, 0, 110, 0.4),
-    inset 0 0 16px rgba(255, 0, 110, 0.18);
-  padding: 32px;
-  text-align: center;
-  position: relative;
-}
-.modal::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border: 1px dashed rgba(255, 0, 110, 0.4);
-  pointer-events: none;
-}
-.modal h2 {
-  margin: 0 0 18px;
-  font-family: var(--pixel);
-  color: var(--magenta);
-  font-size: 22px;
-  text-shadow: 0 0 12px rgba(255, 0, 110, 0.7);
-  letter-spacing: 0.12em;
-}
-.modal .final {
-  font-family: var(--pixel);
-  font-size: 36px;
-  color: var(--yellow);
-  text-shadow: 0 0 16px rgba(245, 255, 0, 0.6);
-  margin: 16px 0 6px;
-}
-.modal .final-label {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-}
-.modal .input-row {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin: 22px 0 12px;
-}
-.modal .input-row input {
-  flex: 1;
-  height: 44px;
-  padding: 0 12px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  outline: 0;
-  font-family: var(--mono);
-}
-.modal .input-row input:focus {
-  border-color: var(--cyan);
-  box-shadow: 0 0 10px rgba(0, 245, 255, 0.35);
-}
-.modal .actions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 18px;
-  flex-wrap: wrap;
-}
-/* Ficha del jugador y aviso de invitado dentro del modal de fin de partida. */
-.modal-player {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 16px;
-}
-.modal-player .l {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--ink-faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.modal-player .v {
-  font-family: var(--pixel);
-  font-size: 14px;
-  color: var(--ink);
-}
+/* El aviso de invitado dentro del panel del tubo: una sola línea y el botón
+   que lleva la partida a /auth. El modal que lo contenía murió en la SPEC 22;
+   lo que sigue vivo es el contenido. */
 .guest-save {
   display: flex;
   flex-direction: column;
@@ -2239,7 +2343,9 @@
   text-align: center;
   max-width: 34ch;
   line-height: 1.6;
-  margin: 22px 0 12px;
+  /* `auto` a los lados: con `0` la línea se pegaba al borde izquierdo en vez
+     de centrarse bajo la puntuación (SPEC 22). */
+  margin: 22px auto 12px;
 }
 
 /* ===== ARKANOID — tercer escenario REAL dentro del CRT (SPEC 15) =====
@@ -2632,10 +2738,6 @@
     padding: 0 16px;
     margin: 24px auto;
   }
-  .hud-actions .fullscreen-toggle {
-    display: inline-flex;
-  }
-
   /* ===== el mueble de móvil: tubo arriba, mando soldado debajo (SPEC 21) =====
      Todo el relleno posible vuelve al lienzo: 4px en el reproductor y 6px en
      el mueble, con el radio del tubo a 14px. Si el resultado se ve apretado,
@@ -2767,11 +2869,57 @@
     padding: 0;
   }
 
-  /* PAUSA y FIN se van del HUD porque ya viven en el mando; arriba quedan ⛶ y
-     SALIR, los dos únicos controles de la fila. */
+  /* PAUSA y MENÚ se van del HUD porque ya viven en el mando; arriba solo
+     queda ⛶. */
   .hud-pause,
   .hud-end {
     display: none;
+  }
+
+  /* La escala compacta del panel (SPEC 22). El tubo mide aquí
+     `0,75 × ancho + 68px` —señal 20, leyenda 24, marcador 24—, o sea unos
+     300px a 390px de viewport, y el panel tiene que caber ahí **sin
+     desplazamiento** en su rama más alta: invitado en fin de partida, que son
+     siete elementos apilados. El orden en que ceden los tamaños, si alguna vez
+     hay que volver a apretar, es `.final` primero, la etiqueta después, y el
+     alto de las opciones el último: 28px es lo que las hace tocables. */
+  .crt-menu {
+    padding: 12px;
+  }
+  .crt-menu h2 {
+    margin: 0 0 8px;
+    font-size: 10px;
+  }
+  .crt-menu .final-label {
+    font-size: 8px;
+  }
+  .crt-menu .final {
+    margin-top: 4px;
+    font-size: 20px;
+  }
+  .crt-menu-save {
+    margin-top: 8px;
+  }
+  .crt-menu .guest-save {
+    gap: 8px;
+  }
+  .crt-menu .guest-save p,
+  .crt-menu .no-record {
+    font-size: 10px;
+  }
+  .crt-menu .toast-saved,
+  .crt-menu .save-error {
+    font-size: 9px;
+  }
+  .crt-menu-actions {
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .crt-menu-actions .btn,
+  .crt-menu-save .btn {
+    min-height: 28px;
+    padding: 6px 12px;
+    font-size: 8px;
   }
 }
 

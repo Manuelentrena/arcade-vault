@@ -167,8 +167,12 @@ export function GamePlayer({
     recuperada ? { ...initialRun, ...restored, lives: 0 } : initialRun,
   );
   const [paused, setPaused] = useState(false);
-  // Volver de /auth con una partida recuperada reabre su modal de fin.
+  // Volver de /auth con una partida recuperada reabre su panel de fin.
   const [over, setOver] = useState(recuperada);
+  // El panel del tubo tiene dos estados y un solo dibujo (SPEC 22): `menu` es
+  // el reanudable, `over` el de fin de partida. `over` manda: si es cierto, da
+  // igual cómo estuviera `menu`, el panel es el del final.
+  const [menu, setMenu] = useState(false);
   // Ya no se da por guardada sin más: el guardado real depende de si es récord.
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -205,6 +209,13 @@ export function GamePlayer({
   // El motor publica aquí su PadHandle y el mando de móvil lo pulsa (SPEC 21).
   // Al remontar el motor (`runKey`) React reasigna el ref solo.
   const padRef = useRef<PadHandle | null>(null);
+
+  // El panel del tubo y el botón que lo abrió. El botón no se guarda por `ref`
+  // porque son dos —el del HUD y la pastilla del mando— y solo uno de los dos
+  // se ve en cada viewport: se anota el que tenía el foco al abrir.
+  const menuRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const panelOpen = menu || over;
 
   // Cubre cualquier salida que no pase por el propio botón (Esc, gesto atrás
   // de Android, etc.) y cierra la pantalla completa si el reproductor se
@@ -251,6 +262,29 @@ export function GamePlayer({
   const ignoreRun = useRef(recuperada);
 
   const togglePause = useCallback(() => setPaused((p) => !p), []);
+
+  /**
+   * El botón MENÚ es un interruptor: abre el panel y, pulsado otra vez, lo
+   * cierra y devuelve la partida. Por eso el panel no tiene CONTINUAR — el
+   * camino de vuelta es el mismo botón, en los dos viewports.
+   *
+   * Quita la pausa a propósito al abrir: el panel ya congela el motor, y
+   * dejarla puesta pintaría el cartel de EN PAUSA debajo.
+   */
+  const toggleMenu = useCallback(() => {
+    setMenu((open) => {
+      if (open) return false;
+      openerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      setPaused(false);
+      return true;
+    });
+  }, []);
+  /** Solo cierra el estado menú; el de fin de partida no se cierra nunca. */
+  const closeMenu = useCallback(() => setMenu(false), []);
+
   const handleRun = useCallback((next: EngineRun) => {
     if (ignoreRun.current) return;
     setRun(next);
@@ -300,11 +334,37 @@ export function GamePlayer({
     return () => clearTimeout(id);
   }, [recuperada, isGuest, saved, saving, isRecord, handleSave]);
 
+  // El foco entra en la primera opción al abrir el panel y vuelve al botón que
+  // lo abrió al cerrarlo. Con `over` no hay opener anotado (lo abre el motor),
+  // así que al reiniciar el foco simplemente no se mueve.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (panelOpen && !wasOpen.current) {
+      menuRef.current?.querySelector<HTMLElement>("button, a")?.focus();
+    } else if (!panelOpen && wasOpen.current) {
+      openerRef.current?.focus();
+      openerRef.current = null;
+    }
+    wasOpen.current = panelOpen;
+  }, [panelOpen]);
+
+  // Esc cierra el menú y nada más: el fin de partida no se descarta con una
+  // tecla, porque debajo no hay partida a la que volver.
+  useEffect(() => {
+    if (!menu || over) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMenu();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [menu, over, closeMenu]);
+
   const restart = () => {
     ignoreRun.current = false;
     setRun(initialRun);
     setPaused(false);
     setOver(false);
+    setMenu(false);
     setSaved(false);
     setSaving(false);
     setSaveError(false);
@@ -337,14 +397,28 @@ export function GamePlayer({
             <div className="v">{String(run.level).padStart(2, "0")}</div>
           </div>
         </div>
-        {/* A ≤ 720px el CSS deja aquí solo ⛶ y SALIR: PAUSA y FIN bajan al
+        {/* A ≤ 720px el CSS deja aquí solo ⛶ y SALIR: PAUSA y MENÚ bajan al
             mando (SPEC 21). El orden del DOM es el mismo en los dos viewports. */}
         <div className="hud-actions">
-          <button className="btn yellow hud-pause" onClick={togglePause}>
+          {/* Los dos se excluyen: con el panel abierto no se puede pausar, y
+              en pausa no se puede abrir el panel. El que no toca se queda
+              gris y desactivado, para que se vea antes de pulsarlo. */}
+          <button
+            className="btn yellow hud-pause"
+            onClick={togglePause}
+            disabled={panelOpen}
+          >
             {paused ? "REANUDAR" : "PAUSA"}
           </button>
-          <button className="btn magenta hud-end" onClick={() => setOver(true)}>
-            FIN
+          {/* La clase `hud-end` se conserva: es la que el CSS usa para
+              ocultarlo en móvil. Lo que cambió es lo que hace el botón —abrir
+              y cerrar un panel reanudable, no matar la partida (SPEC 22)—. */}
+          <button
+            className="btn magenta hud-end"
+            onClick={toggleMenu}
+            disabled={paused || over}
+          >
+            MENÚ
           </button>
           {supportsFullscreen && (
             <button
@@ -360,9 +434,6 @@ export function GamePlayer({
               ⛶
             </button>
           )}
-          <Link className="btn ghost" href={`/juego/${game.id}`}>
-            SALIR
-          </Link>
         </div>
       </div>
 
@@ -381,8 +452,9 @@ export function GamePlayer({
           </div>
           <engine.Component
             key={runKey}
-            /* FIN también congela el motor: el bucle no sigue tras el modal. */
-            paused={paused || over}
+            /* El panel del tubo también congela el motor, esté en estado menú
+               o en fin de partida: el bucle no sigue detrás de él. */
+            paused={paused || over || menu}
             onTogglePause={togglePause}
             onRun={handleRun}
             onOver={handleOver}
@@ -408,6 +480,75 @@ export function GamePlayer({
               <span className="v">{String(run.level).padStart(2, "0")}</span>
             </span>
           </div>
+          {/* El panel del tubo (SPEC 22): un solo dibujo con dos estados. El
+              menú es reanudable y no guarda nada; el fin de partida no tiene
+              CONTINUAR y es el único que monta la rama de guardado. Vive
+              dentro de `.crt-screen`, como el cartel de EN PAUSA, y por encima
+              de él. */}
+          {panelOpen && (
+            <div
+              className="crt-menu"
+              ref={menuRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="av-crt-menu"
+            >
+              <h2 id="av-crt-menu">{over ? "FIN DEL JUEGO" : "MENÚ"}</h2>
+              <div className="final-label">PUNTUACIÓN</div>
+              <div className="final">{run.score.toLocaleString("es-ES")}</div>
+              {/* Colgada de `over` a propósito: con la partida viva no hay
+                  guardado de ninguna clase, ni botón, ni aviso, ni copia de
+                  invitado. Se guarda al final, y una sola vez. */}
+              {over && (
+                <div className="crt-menu-save" aria-live="polite">
+                  {saved ? (
+                    <div className="toast-saved">
+                      ▸ ¡NUEVA MARCA PERSONAL!{" "}
+                      {run.score.toLocaleString("es-ES")}
+                      {previousBestAtSave !== null &&
+                        ` (ANTES ${previousBestAtSave.toLocaleString("es-ES")})`}
+                      _
+                    </div>
+                  ) : isGuest ? (
+                    <div className="guest-save">
+                      <p>Inicia sesión para guardar esta puntuación.</p>
+                      <button className="btn yellow" onClick={goSignIn}>
+                        INICIAR SESIÓN PARA GUARDAR
+                      </button>
+                    </div>
+                  ) : isRecord ? (
+                    <>
+                      <button
+                        className="btn yellow"
+                        onClick={() => void handleSave()}
+                        disabled={saving}
+                      >
+                        {saving ? "GUARDANDO…" : "GUARDAR PUNTUACIÓN"}
+                      </button>
+                      {saveError && !saving && (
+                        <div className="save-error">NO SE PUDO GUARDAR_</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="no-record">
+                      TU MEJOR MARCA EN {game.title} SIGUE SIENDO{" "}
+                      {bestScore?.toLocaleString("es-ES")}
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Sin CONTINUAR: se vuelve a la partida con el mismo botón
+                  MENÚ que abrió el panel. `Esc` sigue siendo el atajo. */}
+              <div className="crt-menu-actions">
+                <button className="btn" onClick={restart}>
+                  REINICIAR
+                </button>
+                <Link className="btn magenta" href="/biblioteca">
+                  SALIR
+                </Link>
+              </div>
+            </div>
+          )}
           {paused && (
             <div
               className="crt-content"
@@ -450,73 +591,10 @@ export function GamePlayer({
         handle={padRef}
         paused={paused}
         onTogglePause={togglePause}
-        onEnd={() => setOver(true)}
+        onMenu={toggleMenu}
+        pauseDisabled={panelOpen}
+        menuDisabled={paused || over}
       />
-
-      {over && (
-        <div className="modal-bd">
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="av-game-over"
-          >
-            <h2 id="av-game-over">FIN DEL JUEGO</h2>
-            <div className="final-label">PUNTUACIÓN FINAL</div>
-            <div className="final">{run.score.toLocaleString("es-ES")}</div>
-            <div className="modal-player">
-              <span className="l">Jugador</span>
-              <span className="v">{name}</span>
-            </div>
-            {saved ? (
-              <div className="toast-saved">
-                ▸ ¡NUEVA MARCA PERSONAL! {run.score.toLocaleString("es-ES")}
-                {previousBestAtSave !== null &&
-                  ` (ANTES ${previousBestAtSave.toLocaleString("es-ES")})`}
-                _
-              </div>
-            ) : isGuest ? (
-              <div className="guest-save">
-                <p>
-                  Estás jugando como invitado. Inicia sesión con Google, GitHub
-                  o tu correo para guardar esta puntuación.
-                </p>
-                <button className="btn yellow" onClick={goSignIn}>
-                  INICIAR SESIÓN PARA GUARDAR
-                </button>
-              </div>
-            ) : isRecord ? (
-              <>
-                <div className="input-row">
-                  <button
-                    className="btn yellow"
-                    onClick={() => void handleSave()}
-                    disabled={saving}
-                  >
-                    {saving ? "GUARDANDO…" : "GUARDAR PUNTUACIÓN"}
-                  </button>
-                </div>
-                {saveError && !saving && (
-                  <div className="save-error">NO SE PUDO GUARDAR_</div>
-                )}
-              </>
-            ) : (
-              <div className="no-record">
-                TU MEJOR MARCA EN {game.title} SIGUE SIENDO{" "}
-                {bestScore?.toLocaleString("es-ES")}
-              </div>
-            )}
-            <div className="actions">
-              <button className="btn" onClick={restart}>
-                JUGAR DE NUEVO
-              </button>
-              <Link className="btn magenta" href="/biblioteca">
-                VOLVER AL VAULT
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

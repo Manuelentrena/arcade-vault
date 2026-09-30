@@ -9,7 +9,7 @@ import type { PadAction, PadHandle, PadLayout } from "@/components/game-player";
  *
  * El dibujo sigue la consola de la foto de referencia: la marca arriba, la
  * cruceta a la izquierda, los dos botones de acción a la derecha y en diagonal
- * —B abajo, A arriba—, y abajo del todo, centrada, la fila de PAUSA y FIN.
+ * —B abajo, A arriba—, y abajo del todo, centrada, la fila de PAUSA y MENÚ.
  *
  * Tres reglas gobiernan el componente:
  *
@@ -57,14 +57,24 @@ export function GamePad({
   handle,
   paused,
   onTogglePause,
-  onEnd,
+  onMenu,
+  pauseDisabled = false,
+  menuDisabled = false,
 }: {
   layout: PadLayout;
   /** El PadHandle del motor montado; null hasta que publica el suyo. */
   handle: RefObject<PadHandle | null>;
   paused: boolean;
   onTogglePause: () => void;
-  onEnd: () => void;
+  /**
+   * Abre y cierra el panel del tubo (SPEC 22). No termina la partida: es
+   * reanudable, y pulsarlo por segunda vez es lo que devuelve el juego.
+   */
+  onMenu: () => void;
+  /** Con el panel abierto no se pausa: la pastilla se apaga y se pinta gris. */
+  pauseDisabled?: boolean;
+  /** En pausa no se abre el panel; misma regla, la otra pastilla. */
+  menuDisabled?: boolean;
 }) {
   /**
    * Pulsar y soltar, nunca "hacer la acción": la repetición mientras se
@@ -144,15 +154,19 @@ export function GamePad({
         </div>
       </div>
 
-      {/* PAUSA y FIN, las dos idénticas en los cuatro juegos y en el sitio que
+      {/* PAUSA y MENÚ, las dos idénticas en los cuatro juegos y en el sitio que
           la consola de referencia reserva a SELECT y START: abajo del todo,
           centradas y en horizontal. Llaman a las mismas funciones que el HUD. */}
       <div className="pad-mid">
-        <div className="pad-slot">
+        {/* Las dos se excluyen: con el panel abierto no se pausa y en pausa no
+            se abre el panel. La que no toca se queda gris —tecla y rótulo—,
+            no desaparece: la silueta del mando no cambia nunca. */}
+        <div className={"pad-slot" + (pauseDisabled ? " is-disabled" : "")}>
           <button
             type="button"
             className="pad-key pad-pill pad-pause"
             onClick={onTogglePause}
+            disabled={pauseDisabled}
             /* El nombre accesible es el mismo que el rótulo visible de
                debajo: quien lo oye y quien lo lee usan la misma palabra. */
             aria-label={paused ? "REANUDAR" : "PAUSA"}
@@ -161,15 +175,16 @@ export function GamePad({
             {paused ? "REANUDAR" : "PAUSA"}
           </span>
         </div>
-        <div className="pad-slot">
+        <div className={"pad-slot" + (menuDisabled ? " is-disabled" : "")}>
           <button
             type="button"
-            className="pad-key pad-pill pad-end"
-            onClick={onEnd}
-            aria-label="FIN"
+            className="pad-key pad-pill pad-menu"
+            onClick={onMenu}
+            disabled={menuDisabled}
+            aria-label="MENÚ"
           />
           <span className="pad-slot-label" aria-hidden="true">
-            FIN
+            MENÚ
           </span>
         </div>
       </div>

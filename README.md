@@ -483,6 +483,7 @@ npx skills@latest add Klerith/fernando-skills
 | [19 — Pantalla completa en el reproductor, solo en móvil](specs/19-pantalla-completa-movil.md)                     | Implementado | SPEC 12, SPEC 13, SPEC 14, SPEC 15, SPEC 18 |
 | [20 — BUSCAMINAS: cuarto motor jugable](specs/20-buscaminas-motor-jugable.md)                                      | Implementado | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19     |
 | [21 — Mando de consola en móvil: los controles salen del CRT](specs/21-interfaz-mando-movil.md)                    | Implementado | SPEC 12, 13, 14, 15, 19, 20                 |
+| [22 — El MENÚ dentro del tubo: el fin de partida sale del modal](specs/22-menu-en-el-tubo.md)                      | Aprobado     | SPEC 18, SPEC 19, SPEC 21                   |
 
 ## Deuda conocida
 
