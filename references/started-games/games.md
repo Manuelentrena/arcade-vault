@@ -19,13 +19,23 @@ The prototypes that were ported live next to this one: `02-asteroids/`, `03-tetr
 
 ## Two rules that keep the engines honest
 
-**The HUD is common to all four games** — player, score, hearts, level, and an action row — so nothing game-specific goes into it and no pause control goes inside the screen. The row's contents change with the viewport, never with the game: `PAUSA` / `FIN` / `SALIR` on desktop, and `⛶` / `SALIR` on mobile, where `PAUSA` and `FIN` live on the gamepad instead (SPEC 21); an engine only reports its numbers through `onRun`. What a game may draw inside its own canvas is its own state: `ASTEROIDES` paints the countdown of the active drop, never the score, the lives or the level, `ARKANOID` paints nothing but the board, and `BUSCAMINAS` nothing but the grid and its cursor.
+**The HUD is common to all four games** — player, score, hearts, level, and an action row — so nothing game-specific goes into it and no pause control goes inside the screen. The row's contents change with the viewport, never with the game: `PAUSA` / `MENÚ` / `⛶` on desktop, and `⛶` alone on mobile, where `PAUSA` and `MENÚ` live on the gamepad instead (SPEC 21); leaving the player is the panel's `SALIR`, not a button in the HUD. An engine only reports its numbers through `onRun`. What a game may draw inside its own canvas is its own state: `ASTEROIDES` paints the countdown of the active drop, never the score, the lives or the level, `ARKANOID` paints nothing but the board, and `BUSCAMINAS` nothing but the grid and its cursor.
 
-And **saving a score is real, but conditional** (SPEC 18): `game-player.tsx` calls `increment_game_plays()` on mount so `games.plays` counts every real attempt regardless of outcome, and separately, once the run ends (real game-over or the `FIN` button) `GUARDAR PUNTUACIÓN` calls the `save_score` RPC — only offered, and only wired to do anything, when the result beats the player's own best for that game; a non-record run shows "TU MEJOR MARCA … SIGUE SIENDO …" instead, with no request to the server at all. The modal shows the session's name — no editable input — and a guest gets an invitation to sign in instead of the save button: it sends the run to `/auth` and back through the URL (`/jugar/tetrix?puntuacion=&nivel=`), which `app/jugar/[id]/page.tsx` validates and hands to the player as `restored` — and, if it's still a record once a real session exists, the run auto-saves without another click.
+And **saving a score is real, but conditional** (SPEC 18): `game-player.tsx` calls `increment_game_plays()` on mount so `games.plays` counts every real attempt regardless of outcome, and separately, once the run has ended — and only then (SPEC 22) — `GUARDAR PUNTUACIÓN` calls the `save_score` RPC — only offered, and only wired to do anything, when the result beats the player's own best for that game; a non-record run shows "TU MEJOR MARCA … SIGUE SIENDO …" instead, with no request to the server at all. The panel carries no editable input, and a guest gets an invitation to sign in instead of the save button: it sends the run to `/auth` and back through the URL (`/jugar/tetrix?puntuacion=&nivel=`), which `app/jugar/[id]/page.tsx` validates and hands to the player as `restored` — and, if it's still a record once a real session exists, the run auto-saves without another click.
 
 ## Fullscreen, mobile only (SPEC 19)
 
-A `⛶` toggle drives the real Fullscreen API over the whole `.av-player`. It **used to float absolutely inside `.crt`**, because at 390px `PAUSA`/`FIN`/`SALIR` already filled the HUD row, and `.av-player:fullscreen .hud-actions { display: none }` then made that floating button the only way out of fullscreen. **SPEC 21 undid both**: with `PAUSA` and `FIN` moved down to the pad, `⛶` fits in `.hud-actions` beside `SALIR` and stops covering a corner of the canvas, and that `:fullscreen` rule is deleted — hiding the HUD would now hide `SALIR` as well, and the game controls are at the bottom, not the top. What did not change: support is detected with `useSyncExternalStore` (`getServerSnapshot` returns `false`), not a `useEffect`, so the server HTML and the first client render agree. A `fullscreenchange` listener keeps `isFullscreen` honest against Esc and the Android back gesture, and unmounting the player exits if it was still active. CSS shows the button only under 720px. There is no orientation lock, by decision.
+A `⛶` toggle drives the real Fullscreen API over the whole `.av-player`, now in both viewports — fullscreen hides the nav and the footer too, not just a mobile browser bar, and the tube gains that height on a desktop screen as well. It **used to float absolutely inside `.crt`**, because at 390px `PAUSA`/`FIN`/`SALIR` already filled the HUD row (`FIN` is `MENÚ` since SPEC 22), and `.av-player:fullscreen .hud-actions { display: none }` then made that floating button the only way out of fullscreen. **SPEC 21 undid both**: with `PAUSA` and `MENÚ` moved down to the pad, `⛶` fits in `.hud-actions` beside `SALIR` and stops covering a corner of the canvas, and that `:fullscreen` rule is deleted — hiding the HUD would now hide `SALIR` as well, and the game controls are at the bottom, not the top. What did not change: support is detected with `useSyncExternalStore` (`getServerSnapshot` returns `false`), not a `useEffect`, so the server HTML and the first client render agree. A `fullscreenchange` listener keeps `isFullscreen` honest against Esc and the Android back gesture, and unmounting the player exits if it was still active. The button is hidden only where the browser has no Fullscreen API, and that is the JSX's call, not the CSS's. There is no orientation lock, by decision.
+
+Desktop fullscreen has its own layout, in a `@media (min-width: 721px)` block keyed on
+`.av-player:fullscreen`. Outside fullscreen the player is width-driven: at 1100px the 4 / 3 tube is
+825px tall and, with the HUD above it, taller than any laptop screen — which is fine, because the page
+scrolls. Inside fullscreen it is not fine, so **height takes over from width**: the player becomes a
+column exactly as tall as the screen, the HUD keeps what it needs, the tube takes the rest, and the
+tube derives its *width* from that height to hold the 4 / 3 (`width: auto` plus an `align-items:
+center` that stops the flex from stretching it). Nothing overflows and nothing scrolls. The mobile
+cabinet is deliberately out of that block: below 720px the tube is already width-bound and the pad
+closes the cabinet underneath, which is a different split (SPEC 21).
 
 ## The mobile gamepad (SPEC 21)
 
@@ -66,7 +76,7 @@ Four rules hold the pad together:
   and a fifth game stays one more row in the registry.
 - **No key says what it does.** The action buttons are plain red circles and the pills are plain
   capsules; the name sits **below** the key in its own `.pad-slot-label` (`B`, `A`, `PAUSA`/`REANUDAR`,
-  `FIN`), exactly as the reference console labels them, and the D-pad's arrows are drawn by CSS
+  `MENÚ`), exactly as the reference console labels them, and the D-pad's arrows are drawn by CSS
   (`.pad-arm::before`). What a button *does* in this game is told by the legend inside the tube, never by
   the pad. For a screen reader the name is the button's `aria-label`; the label underneath is
   `aria-hidden`.
@@ -74,10 +84,10 @@ Four rules hold the pad together:
   dimmed inert `<span>`s — no role, no focus, no pointer events — so the silhouette is identical in all
   four.
 
-`PAUSA` and `FIN` are the same two pills in every game, wired to `GamePlayer`'s own `togglePause` and
-`setOver(true)` — the same functions the HUD used, not new ones. The pad's three colours: the D-pad is
+`PAUSA` and `MENÚ` are the same two pills in every game, wired to `GamePlayer`'s own `togglePause` and
+`openMenu` — the same functions the HUD uses, not new ones. The pad's three colours: the D-pad is
 `--cyan`, the two action buttons are `--magenta` — the same one the logo writes `VAULT` in — and both
-pills are `--ink`, the theme's bone white, so what tells `PAUSA` from `FIN` is the label under each, not
+pills are `--ink`, the theme's bone white, so what tells `PAUSA` from `MENÚ` is the label under each, not
 its colour. `--amber` and `--violet` were promoted to named
 accents along the way and neither is on the pad now; both were already in the theme three times over
 (`--piece-z`/`--brick-amber`/`--rock-flame` and `--piece-j`/`--brick-violet`/`--rock-rock`), so naming
@@ -111,6 +121,55 @@ floating over the CRT into `.hud-actions` next to `SALIR`, which is now a two-co
 would now hide `SALIR` too. Touch controls on the canvas survive untouched: dragging the paddle in
 `ARKANOID` and tapping a cell in `BUSCAMINAS` are still the most precise way to play them — the pad is
 one more route, not the only one.
+
+## The panel inside the tube (SPEC 22)
+
+The end of a run used to be a `.modal-bd` fixed over the whole page. It isn't any more: **a run's end
+is painted inside the tube, never on top of the page**. `.crt-menu` is a sibling of the `EN PAUSA`
+sign inside `.crt-screen` — absolute, `inset: 0`, above it in `z-index` — and `.modal-bd` / `.modal`
+are gone from both the DOM and `globals.css`.
+
+One panel, two states, decided by two booleans in `game-player.tsx`:
+
+| `menu`  | `over`  | Title           | Saving | Options               |
+| ------- | ------- | --------------- | ------ | --------------------- |
+| `false` | `false` | —               | —      | —                     |
+| `true`  | `false` | `MENÚ`          | No     | `REINICIAR` · `SALIR` |
+| —       | `true`  | `FIN DEL JUEGO` | Yes    | `REINICIAR` · `SALIR` |
+
+`over` wins: however `menu` stood, a true `over` makes it the game-over panel. The second rule the
+spec adds: **a score is only saved once the run is over.** The whole save branch — the button, the
+green toast, the error line, the "tu mejor marca" line and the guest copy — hangs off `{over && …}`,
+so there is no way to reach `handleSave` with a live run. Saving an intermediate score from a run
+that then keeps climbing would stop "my record" and "my run" from being the same thing.
+
+The button that opens it is called `MENÚ`, in the HUD and on the pad, and **opening it does not cost
+the run**: `toggleMenu()` clears the pause and sets `menu`, the engine freezes through
+`paused={paused || over || menu}`, and the run comes back with its score, lives and level intact.
+The panel has no `CONTINUAR` — **`MENÚ` is a switch**, and pressing it a second time is the way back,
+on desktop and on mobile alike; `Esc` is the keyboard shortcut for the same thing, and it closes the
+menu state only, since there is nothing to go back to under a game-over. So the panel's two options
+are `REINICIAR` and `SALIR` in both states; what `over` adds is the whole save branch.
+
+`PAUSA` stays exactly as it was, with its own `EN PAUSA` sign: it is still the one-tap freeze, `MENÚ`
+is the panel. The two **exclude each other**, in the HUD and on the pad: with the panel open `PAUSA`
+is disabled, and while paused `MENÚ` is. Neither ever disappears — the HUD row must not dance and the
+pad's silhouette is the same in all four games — they go grey and inert, so the state reads before
+anything is pressed.
+
+Nothing on the pad, and no `.btn` anywhere, can be selected by a finger: `user-select`,
+`-webkit-touch-callout`, `-webkit-tap-highlight-color` and `touch-action: manipulation` are set on
+`.game-pad` as a whole, not only on `.pad-key`. What a long press actually selected was the label
+**under** the key — the `A`, the `B`, the arrow — and those are siblings of the button, not children
+of it, so a rule on the key alone never reached them.
+
+Two constraints on anything added to it. **The panel never scrolls** — at 390px the tube is about
+300px tall (`0.75 × width + 68`) and the tallest branch is a guest at game-over: seven stacked
+elements. A new line means measuring that branch again at 390 × 844, in normal and in fullscreen; the
+compact scale lives in the `@media (max-width: 720px)` block, and the order things give way in is
+`.final` first, the `PUNTUACIÓN` label next, the 28px option height last — that is what keeps them
+thumb-sized. And the **D-pad does not drive the panel**: with a finger over the screen the button is
+touched directly, and routing `PadHandle` around an open panel is a spec of its own.
 
 ## Adding a fifth game
 
