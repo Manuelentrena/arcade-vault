@@ -86,9 +86,14 @@ export async function getCategorias(): Promise<Categoria[]> {
 export async function getGames(): Promise<Game[]> {
   const supabase = await createClient();
   const [{ data }, best] = await Promise.all([
-    // Por created_at, no por nombre: conserva el orden curado de la migración
-    // (tetrix, asteroides, arkanoid) en vez del alfabético.
-    supabase.from("games").select(GAME_COLUMNS).order("created_at"),
+    // Por created_at y slug: los tres primeros comparten fecha, así que sin
+    // desempate el orden es aleatorio entre reconstrucciones de la base
+    // (SPEC 21 debt). slug como criterio de desempate lo hace determinista.
+    supabase
+      .from("games")
+      .select(GAME_COLUMNS)
+      .order("created_at")
+      .order("slug"),
     getBestScores(),
   ]);
 
