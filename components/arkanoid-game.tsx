@@ -12,6 +12,8 @@ import type { PadAction, PadHandle } from "@/components/game-player";
 import {
   BURST_MS,
   HEIGHT,
+  PADDLE_W,
+  WIDEN_PER_PICK,
   WIDTH,
   createState,
   movePaddle,
@@ -87,6 +89,8 @@ export function ArkanoidGame({
   const inkRef = useRef("#e8f0ff");
   const lineRef = useRef("rgba(0, 245, 255, 0.18)");
   const cyanRef = useRef("#00f5ff");
+  const greenRef = useRef("#00ff88");
+  const redRef = useRef("#ff2f45");
   const lastRunRef = useRef<ArkanoidRun | null>(null);
 
   /**
@@ -178,10 +182,29 @@ export function ArkanoidGame({
       ctx.globalAlpha = 1;
     }
 
-    // La pala, con los extremos más claros: es donde cambia el ángulo.
-    const { paddle, ball } = state;
+    // Los premios: cuadrados planos de su color, sin halo —no son la bola.
+    for (const drop of state.drops) {
+      ctx.fillStyle = drop.kind === "ball" ? greenRef.current : redRef.current;
+      ctx.fillRect(drop.x, drop.y, drop.w, drop.h);
+    }
+
+    // La pala: cuerpo cian de siempre, con el o los ensanches en rojo a cada
+    // lado y una línea blanca por ensanche para contarlos de un vistazo.
+    const { paddle, balls, widenings } = state;
+    const widenPx = widenings * WIDEN_PER_PICK;
     ctx.fillStyle = cyanRef.current;
-    ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+    ctx.fillRect(paddle.x + widenPx, paddle.y, PADDLE_W, paddle.h);
+    if (widenPx > 0) {
+      ctx.fillStyle = redRef.current;
+      ctx.fillRect(paddle.x, paddle.y, widenPx, paddle.h);
+      ctx.fillRect(paddle.x + widenPx + PADDLE_W, paddle.y, widenPx, paddle.h);
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      for (let i = 1; i <= widenings; i++) {
+        const w = i * WIDEN_PER_PICK;
+        ctx.fillRect(paddle.x + w - 1, paddle.y, 1, paddle.h);
+        ctx.fillRect(paddle.x + paddle.w - w, paddle.y, 1, paddle.h);
+      }
+    }
     ctx.fillStyle = "rgba(255,255,255,0.55)";
     ctx.fillRect(paddle.x, paddle.y, paddle.w * 0.18, paddle.h);
     ctx.fillRect(
@@ -191,12 +214,12 @@ export function ArkanoidGame({
       paddle.h,
     );
 
-    // La bola: un cuadrado con halo se lee mejor en un tubo que un círculo.
+    // Las bolas: cuadrados con halo, se leen mejor en un tubo que un círculo.
     ctx.save();
     ctx.shadowBlur = 16;
     ctx.shadowColor = cyanRef.current;
     ctx.fillStyle = inkRef.current;
-    ctx.fillRect(ball.x, ball.y, ball.w, ball.h);
+    for (const ball of balls) ctx.fillRect(ball.x, ball.y, ball.w, ball.h);
     ctx.restore();
   }, [context2d, drawBrick]);
 
@@ -235,6 +258,10 @@ export function ArkanoidGame({
     if (line) lineRef.current = line;
     const cyan = root.getPropertyValue("--cyan").trim();
     if (cyan) cyanRef.current = cyan;
+    const green = root.getPropertyValue("--green").trim();
+    if (green) greenRef.current = green;
+    const red = root.getPropertyValue("--red").trim();
+    if (red) redRef.current = red;
     draw();
     publish();
   }, [draw, publish]);
@@ -394,10 +421,14 @@ export function ArkanoidGame({
 
   return (
     <>
-      {/* Banda de leyenda: ARKANOID no tiene nada que explicar ahí —el muro se
-          lee solo—, así que muestra el rótulo vacío, como TETRIX. */}
+      {/* Banda de leyenda: los dos premios que pueden caer, con su color. */}
       <div className="screen-legend">
-        <span className="screen-legend-empty">LEYENDA</span>
+        <span className="screen-legend-item">
+          <span className="k ark-ball">●</span>BOLA EXTRA
+        </span>
+        <span className="screen-legend-item">
+          <span className="k ark-paddle">▬</span>+ PALA
+        </span>
       </div>
       <div className="ark-stage">
         <canvas

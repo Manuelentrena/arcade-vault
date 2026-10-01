@@ -484,6 +484,7 @@ npx skills@latest add Klerith/fernando-skills
 | [20 — BUSCAMINAS: cuarto motor jugable](specs/20-buscaminas-motor-jugable.md)                                      | Implementado | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19     |
 | [21 — Mando de consola en móvil: los controles salen del CRT](specs/21-interfaz-mando-movil.md)                    | Implementado | SPEC 12, 13, 14, 15, 19, 20                 |
 | [22 — El MENÚ dentro del tubo: el fin de partida sale del modal](specs/22-menu-en-el-tubo.md)                      | Aprobado     | SPEC 18, SPEC 19, SPEC 21                   |
+| [24 — ARKANOID: premios que caen, segunda bola y pala que crece](specs/24-arkanoid-premios-y-multiball.md)         | Implementado | SPEC 15, SPEC 18, SPEC 21, SPEC 22          |
 
 ## Deuda conocida
 
