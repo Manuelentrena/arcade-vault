@@ -326,19 +326,21 @@ Ese número queda por debajo de los 18 px que `BUSCAMINAS` midió como suelo —
 
 ### 3.5 Colores
 
-**Ningún token nuevo en `:root`.** El juego se pinta con lo que ya hay:
+**Ningún token nuevo en `:root`.** El juego se pinta con lo que ya hay. Decisión revisada durante la implementación, a petición explícita, sobre la redacción original (que usaba `--green`/`--red`): el cuerpo y la cabeza pasan a `--cyan` y la fruta a `--magenta`, los dos colores del propio logotipo — `ARCADE` se pinta en cian y `VAULT` en magenta (`components/nav.tsx`), y `game-player.tsx` ya describía `--magenta` como "el mismo con el que el logo escribe VAULT" antes de esta spec.
 
 ```
-cuerpo y cabeza  → var(--green)   (el color de catálogo del juego)
-fruta            → var(--red)     (el que SPEC 21 añadió para la mina)
-rejilla          → var(--line)    (lo mismo que usa .tetris-board)
+cuerpo y cabeza  → var(--cyan)     (el color con el que el logo escribe ARCADE)
+fruta            → var(--magenta)  (el color con el que el logo escribe VAULT)
+rejilla          → var(--line)     (lo mismo que usa .tetris-board)
 ```
 
-La cabeza es `--green` aclarado y los ojos un gris casi negro sin tokenizar, mismo criterio que los literales de fondo de `.tetris-stage`: no son parte de la familia `--piece-*`/`--rock-*`/`--brick-*`, son dibujo del escenario. Cero hex nuevos.
+La cabeza es `--cyan` aclarado y los ojos un gris azulado casi negro (`#06141a`) sin tokenizar, mismo criterio que los literales de fondo de `.tetris-stage`: no son parte de la familia `--piece-*`/`--rock-*`/`--brick-*`, son dibujo del escenario. Cero hex nuevos.
+
+**El `color` de catálogo (`games.color = 'green'`, §3.1) no cambia.** Es un campo distinto, el acento del chip/ficha en `/biblioteca`, desacoplado del color con el que el motor pinta su propio lienzo — los cuatro juegos existentes ya lo hacen así (p. ej. `TETRIX` es `magenta` de catálogo pero sus siete piezas usan los ocho tokens de la paleta). Que el lienzo ahora use `--cyan`/`--magenta` no colisiona con nada: son los mismos tokens que ya pinta `ARKANOID` en su propio tablero, y un token de color se reutiliza entre motores constantemente (el propio `--green` seguía libre para quien lo quisiera después).
 
 ### 3.6 Cobertura del catálogo (`.cover-snake`)
 
-Como `BUSCAMINAS`, `SERPIENTE` es puramente aditivo: no hay ninguna clase `cover-*` huérfana que reciclar. `.cover-snake` se dibuja desde cero en `app/globals.css`, junto a las otras cuatro y con el mismo lenguaje visual (gradiente de fondo más un `::before`/`::after` con formas geométricas): un recorrido en zigzag de celdas verdes con un punto rojo delante, en la paleta `--green`/`--red`/`--ink-faint`. Sirve de respaldo mientras `image` sea `null` y, en `/biblioteca`, lo sustituye `cover-shot` en cuanto exista `public/juegos/serpiente.png`.
+Como `BUSCAMINAS`, `SERPIENTE` es puramente aditivo: no hay ninguna clase `cover-*` huérfana que reciclar. `.cover-snake` se dibuja desde cero en `app/globals.css`, junto a las otras cuatro y con el mismo lenguaje visual (gradiente de fondo más un `::before`/`::after` con formas geométricas): un recorrido en zigzag de celdas cian con un punto magenta delante, en la paleta `--cyan`/`--magenta`/`--ink-faint` — la misma corrección de §3.5. Sirve de respaldo mientras `image` sea `null` y, en `/biblioteca`, lo sustituye `cover-shot` en cuanto exista `public/juegos/serpiente.png`.
 
 El nombre es `cover-snake`, no `cover-serpiente`: las cuatro existentes son `cover-tetro`, `cover-rocas`, `cover-bricks` y `cover-minas` — fichas cortas, ninguna es el `slug` entero — y `snake` es la que mantiene esa familia junto a los prefijos `.tetris-`/`.rocks-`/`.ark-`/`.minas-` de los escenarios. El `game-planner` había propuesto `cover-serpiente` en su ficha del ledger; se corrige aquí a sabiendas, porque el ledger describe candidatos y es esta spec la que fija la fila real.
 
@@ -401,7 +403,7 @@ Añadir `"serpiente"` a `JUEGOS` mete el juego en cinco tests de golpe, y los ci
 4. **Dos giros en el mismo paso no la matan**, también de extremo a extremo: es la regla no negociable y merece verse llegar por el teclado real, no sólo por el módulo.
 5. **PAUSA congela el lienzo de verdad.** Aquí la aserción es más fuerte que en los otros cuatro: sin pausa el lienzo cambiaría solo, así que exigirlo **idéntico** un segundo prueba que el bucle está cancelado, no sólo que el cartel se pintó.
 
-La cabeza se localiza con `cabezaSerpiente()`, un ayudante que la lee del propio lienzo por color: `components/serpiente-game.tsx` la pinta con el verde del tema más un velo blanco al 45 %, así que es el único elemento con el rojo y el verde altos a la vez —el cuerpo lleva el verde sin velo (R ≈ 0) y la fruta es roja (G ≈ 47)—. Hace falta porque «la huella del lienzo cambió» no prueba nada en el único motor que se mueve solo.
+La cabeza se localiza con `cabezaSerpiente()`, un ayudante que la lee del propio lienzo por color: `components/serpiente-game.tsx` la pinta con el cian del tema más un velo blanco al 45 %, así que es el único elemento con el rojo (R) y el verde (G) altos a la vez —el cuerpo lleva el cian sin velo (R ≈ 0) y la fruta es el magenta del logo (G ≈ 0)—. La condición no cambió entre la versión verde/rojo original y la cian/magenta de §3.5: son los canales de color los que importan, no el nombre del token. Hace falta porque «la huella del lienzo cambió» no prueba nada en el único motor que se mueve solo.
 
 **Extensión del test de paridad de HUD** (`describe("arkanoid")` › `el HUD es el mismo que el de los otros juegos`): se añade `serpiente` a la comparación, de forma que las cuatro etiquetas de `.player-hud .hud-stat .l` y los botones visibles de `.hud-actions` de los cinco juegos sean idénticos entre sí.
 
@@ -519,8 +521,10 @@ Cada paso deja el proyecto compilando y la suite en un estado conocido.
 - **Sí:** `dt` acotado a 200 ms antes de acumular. Sin eso, volver de una pestaña en segundo plano drena una ráfaga de pasos que el jugador no vio y lo mata sin haber tocado nada. `ARKANOID` resolvió el mismo problema acotando a 50 ms; aquí el paso es mucho más largo, así que el techo también.
 - **Sí:** `perifericos = array['teclado']`. A diferencia de `ARKANOID` (arrastra la pala) y `BUSCAMINAS` (señala una celda), aquí el ratón no haría nada que el teclado no haga: no se apunta, se conduce. Declarar `raton` sería relleno.
 - **Sí:** `dificultad = 1`. Es el único valor libre del rango y es honesto: cuatro teclas, una regla, y los primeros niveles son lentos. Es el más bajo del catálogo (`BUSCAMINAS` 2, `ARKANOID` 3, `TETRIX` 4, `ASTEROIDES` 5), y eso es correcto.
-- **Sí:** `color = 'green'`, reutilizado. Los cuatro tokens del `CHECK` están tomados, así que el quinto juego reutiliza por fuerza; `green` es el de `BUSCAMINAS`, que es `PUZZLE`, y siendo `SERPIENTE` de `ARCADE` los dos verdes nunca comparten un filtro de categoría. Además es el color del juego, que ayuda.
+- **Sí:** `color = 'green'`, reutilizado. Los cuatro tokens del `CHECK` están tomados, así que el quinto juego reutiliza por fuerza; `green` es el de `BUSCAMINAS`, que es `PUZZLE`, y siendo `SERPIENTE` de `ARCADE` los dos verdes nunca comparten un filtro de categoría. Es el acento del chip/ficha en `/biblioteca`, no el color con el que el motor pinta su propio lienzo (§3.5) — los dos nunca tuvieron que coincidir, igual que `TETRIX` es `magenta` de catálogo con siete piezas de otros colores.
 - **No:** ampliar el `CHECK` de `color` con un token nuevo. Sería una migración de esquema y un token de tema para un problema que la disciplina de categorías ya resuelve.
+- **Sí:** el lienzo se pinta en `--cyan`/`--magenta`, los dos colores del logotipo, no en `--green`/`--red`. Decisión revisada sobre la redacción original de esta spec, a petición explícita: `ARCADE` se escribe en cian y `VAULT` en magenta (`components/nav.tsx`), y `game-player.tsx` ya llamaba a `--magenta` "el mismo con el que el logo escribe VAULT" antes de que esta spec existiera — es el vocabulario de color que el proyecto ya usaba para hablar de la marca, no uno inventado para SERPIENTE.
+- **No:** mantener `--green`/`--red` "porque son los que ya usaba BUSCAMINAS/la mina". Esos dos son correctos para lo que pintan (`BUSCAMINAS` reutiliza `--green` como color de catálogo y cursor, `--red` es la mina desde SPEC 21), pero no tienen ninguna relación con el logotipo, que es lo que se pidió.
 - **Sí:** `.cover-snake` y los prefijos `.snake-*`, no `cover-serpiente`/`.serpiente-*`. Las cuatro portadas existentes son `cover-tetro`, `cover-rocas`, `cover-bricks` y `cover-minas` — fichas cortas, ninguna es el `slug` entero — y los escenarios son `.tetris-`/`.rocks-`/`.ark-`/`.minas-`. El `game-planner` había propuesto `cover-serpiente`; se corrige aquí a sabiendas, porque el ledger describe candidatos y es esta spec la que fija la fila real.
 - **Sí:** `.cover-snake` dibujada desde cero en CSS. No hay ninguna clase huérfana que reciclar (igual que `BUSCAMINAS`) y el patrón «captura real + respaldo en CSS» está establecido en los cuatro.
 - **No:** sembrar el azar de la fruta para tests deterministas. Ninguna aserción depende de dónde caiga: un giro cambia el lienzo, la serpiente avanza sola y la puntuación se comprueba conduciendo hasta una fruta. `ARKANOID` necesitaba muros reproducibles; aquí no hay nada que el determinismo resolviera.

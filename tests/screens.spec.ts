@@ -157,10 +157,11 @@ async function loseArkanoid(page: Page) {
  * haya llegado al motor, porque cambia igual. El **rumbo** sí lo prueba, y la
  * cabeza se puede aislar por color sin tocar el estado del motor.
  *
- * `components/serpiente-game.tsx` pinta la cabeza con el verde del tema más un
- * velo blanco al 45 %, así que es el único elemento con el rojo y el verde
- * altos a la vez: el cuerpo lleva el verde sin velo (R ≈ 0) y la fruta es roja
- * (G ≈ 47). De ahí el umbral.
+ * `components/serpiente-game.tsx` pinta la cabeza con el cian del tema más un
+ * velo blanco al 45 %, así que es el único elemento con el rojo (R) y el
+ * verde (G) altos a la vez: el cuerpo lleva el cian sin velo (R ≈ 0) y la
+ * fruta es el magenta del logo (G ≈ 0). De ahí el umbral — sigue valiendo sin
+ * tocarlo: son los canales de color, no el nombre del token, los que importan.
  */
 async function cabezaSerpiente(page: Page): Promise<{
   fila: number;

@@ -1054,20 +1054,22 @@
         var(--ink-faint) 26px 27px
       )
       0 0/100% 100%,
-    #061408;
+    #06111a;
   opacity: 1;
 }
+/* Cian para el cuerpo y magenta para la fruta: los dos colores del logo
+   (`ARCADE` en cian, `VAULT` en magenta), no un verde/rojo propios. */
 .cover-snake::after {
   content: "";
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(var(--green), var(--green)) 18% 66%/11% 16%,
-    linear-gradient(var(--green), var(--green)) 29% 66%/11% 16%,
-    linear-gradient(var(--green), var(--green)) 29% 50%/11% 16%,
-    linear-gradient(var(--green), var(--green)) 40% 50%/11% 16%,
-    linear-gradient(var(--green), var(--green)) 51% 50%/11% 16%,
-    linear-gradient(var(--green), var(--green)) 51% 34%/11% 16%;
+    linear-gradient(var(--cyan), var(--cyan)) 18% 66%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 29% 66%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 29% 50%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 40% 50%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 51% 50%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 51% 34%/11% 16%;
   background-repeat: no-repeat;
   opacity: 0.55;
 }
@@ -1076,9 +1078,9 @@
   position: absolute;
   left: 70%;
   top: 24%;
-  color: var(--red);
+  color: var(--magenta);
   font-size: 18px;
-  text-shadow: 0 0 10px var(--red);
+  text-shadow: 0 0 10px var(--magenta);
 }
 
 /* ===== detail screen ===== */

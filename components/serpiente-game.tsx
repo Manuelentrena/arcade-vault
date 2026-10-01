@@ -34,13 +34,19 @@ import {
  */
 const MAX_DT = 200;
 
-/** Tokens de `:root`; el CSS es la única fuente de verdad de la paleta. */
-const COLOR_VARS = ["--green", "--red", "--line"] as const;
+/**
+ * Tokens de `:root`; el CSS es la única fuente de verdad de la paleta. Cian y
+ * magenta porque son los dos colores del logotipo —`ARCADE` se pinta en cian,
+ * `VAULT` en magenta (`components/nav.tsx`), y `game-player.tsx` ya describe
+ * `--magenta` como "el mismo con el que el logo escribe VAULT"—, pedido
+ * explícito sobre el verde/rojo original de esta spec.
+ */
+const COLOR_VARS = ["--cyan", "--magenta", "--line"] as const;
 
 /** Respaldo por si algún token desapareciera: un tablero invisible no se juega. */
 const COLOR_FALLBACK = [
-  "#00ff88",
-  "#ff2f45",
+  "#00f5ff",
+  "#ff006e",
   "rgba(0, 245, 255, 0.18)",
 ] as const;
 
@@ -115,7 +121,7 @@ function SerpienteGameImpl({
     const ctx = context2d(canvas);
     if (!ctx) return;
 
-    const [green, red, line] = colorsRef.current;
+    const [cyan, magenta, line] = colorsRef.current;
 
     // Transparente, no negro: igual que TETRIX, el lienzo deja ver el
     // resplandor de `.snake-stage` que hay detrás. Rellenarlo de negro lo
@@ -138,17 +144,17 @@ function SerpienteGameImpl({
       ctx.stroke();
     }
 
-    // Fruta.
+    // Fruta: el magenta del logo, el mismo con el que escribe VAULT.
     const fx = state.fruit.x * CELL + CELL / 2;
     const fy = state.fruit.y * CELL + CELL / 2;
-    ctx.fillStyle = red;
+    ctx.fillStyle = magenta;
     ctx.beginPath();
     ctx.arc(fx, fy, CELL * 0.3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Cuerpo, de la cola a la cabeza. Se atenúa hacia la cola para leer de un
-    // vistazo la propia trayectoria, que es el peligro real del juego.
-    ctx.fillStyle = green;
+    // Cuerpo, de la cola a la cabeza, en el cian del logo. Se atenúa hacia la
+    // cola para leer de un vistazo la propia trayectoria, el peligro real.
+    ctx.fillStyle = cyan;
     for (let i = state.snake.length - 1; i > 0; i--) {
       const s = state.snake[i];
       ctx.globalAlpha = 0.35 + (1 - i / state.snake.length) * 0.4;
@@ -156,18 +162,18 @@ function SerpienteGameImpl({
     }
     ctx.globalAlpha = 1;
 
-    // Cabeza: el mismo verde aclarado con un velo blanco, para no parsear el
+    // Cabeza: el mismo cian aclarado con un velo blanco, para no parsear el
     // token —puede venir en cualquier formato— solo para subirle el brillo.
     const head = state.snake[0];
     const hx = head.x * CELL;
     const hy = head.y * CELL;
-    ctx.fillStyle = green;
+    ctx.fillStyle = cyan;
     ctx.fillRect(hx + 1, hy + 1, CELL - 2, CELL - 2);
     ctx.fillStyle = "rgba(255,255,255,0.45)";
     ctx.fillRect(hx + 1, hy + 1, CELL - 2, CELL - 2);
 
     // Ojos orientados al rumbo: dicen hacia dónde va sin leer nada.
-    ctx.fillStyle = "#06140a";
+    ctx.fillStyle = "#06141a";
     const ox = state.dir.x * CELL * 0.18;
     const oy = state.dir.y * CELL * 0.18;
     const px = state.dir.x === 0 ? CELL * 0.18 : 0;
