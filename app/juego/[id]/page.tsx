@@ -23,10 +23,11 @@ function perifericosLabel(perifericos: string[]): string {
 
 export default async function GameDetailPage(props: PageProps<"/juego/[id]">) {
   const { id } = await props.params;
-  const game = await getGameBySlug(id);
+  const [game, scores] = await Promise.all([
+    getGameBySlug(id),
+    getLeaderboard(id, 10),
+  ]);
   if (!game) notFound();
-
-  const scores = await getLeaderboard(id, 10);
 
   return (
     <div className="av-detail fade-in">

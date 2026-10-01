@@ -47,6 +47,22 @@ export async function getLeaderboard(
   }));
 }
 
+/** Mejor puntuación de un juego concreto, sin traer la tabla entera. */
+export async function getBestScoreForGame(
+  gameId: string,
+): Promise<number | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("scores")
+    .select("score")
+    .eq("game_id", gameId)
+    .order("score", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data?.score ?? null;
+}
+
 /** Mejor puntuación de cada juego, mapeada por `game_id`. */
 export async function getBestScores(): Promise<Record<string, number>> {
   const supabase = await createClient();
