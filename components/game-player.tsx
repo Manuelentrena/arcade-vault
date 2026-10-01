@@ -98,7 +98,7 @@ const ENGINES: Record<
         left: "Mover a la izquierda",
         right: "Mover a la derecha",
       },
-      buttons: ["Caída instantánea", null],
+      buttons: ["Caída instantánea", "Rotar la pieza"],
     },
   },
   asteroides: {

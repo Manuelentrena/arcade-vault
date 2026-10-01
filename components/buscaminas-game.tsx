@@ -375,6 +375,12 @@ export function BuscaminasGame({
       }
       if (pressed("Space")) reveal(state);
       if (pressed("KeyF")) toggleFlag(state);
+      // Segundo camino de entrada, aparte de `act()`: por aquí llegan el
+      // teclado, la cruceta de dentro del tubo y el mando de móvil. `act()`
+      // sincroniza la leyenda tras el ratón; sin esta llamada, revelar o
+      // marcar por cualquiera de estas vías repinta el canvas pero deja el
+      // `⚑ N / M` de la leyenda congelado.
+      syncLegend();
 
       draw();
       publish();
@@ -387,7 +393,7 @@ export function BuscaminasGame({
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [draw, paused, pressed, publish]);
+  }, [draw, paused, pressed, publish, syncLegend]);
 
   // Soltar todas las teclas mantenidas al pausar o desmontar.
   useEffect(() => {
