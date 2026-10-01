@@ -402,6 +402,9 @@ export function TetrisGame({
           case "a":
             press(hardDrop, false);
             break;
+          case "b":
+            press(rotate, false);
+            break;
           default:
             break;
         }

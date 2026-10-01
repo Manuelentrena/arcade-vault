@@ -632,6 +632,26 @@ test.describe("reproductor", () => {
       page.getByRole("button", { name: "Activar pantalla completa" }),
     ).toBeVisible();
   });
+
+  /**
+   * SPEC 23: `.av-player` carga `user-select: none` entero, no un listado por
+   * contenedor. Se comprueba con `getComputedStyle`, no con un intento de
+   * selección real: Playwright no reproduce el gesto del dedo que abre el
+   * menú de copiar de iOS, que es lo que el riesgo de la spec deja escrito
+   * como no verificable aquí — eso se hace a mano.
+   */
+  test("el reproductor entero no se puede seleccionar", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".tetris-board")).toBeVisible();
+
+    for (const selector of [".player-hud", ".screen-stats", ".crt-bottom"]) {
+      const valor = await page
+        .locator(selector)
+        .evaluate((el) => getComputedStyle(el).userSelect);
+      expect(valor, selector).toBe("none");
+    }
+  });
 });
 
 test.describe("fin de partida como invitado", () => {
@@ -766,6 +786,9 @@ test.describe("tetrix", () => {
     }
     // Los rótulos son los mismos en los dos viewports: en escritorio los lleva
     // la columna del tubo y en móvil el mando, que hereda cada aria-label.
+    // `.first()` a propósito: desde SPEC 23 "Rotar la pieza" lo llevan dos
+    // teclas del mando de móvil a la vez (▲ y B), y aquí sólo importa que el
+    // rótulo exista en pantalla, no cuántas veces.
     for (const label of [
       "Rotar la pieza",
       "Mover a la izquierda",
@@ -773,7 +796,9 @@ test.describe("tetrix", () => {
       "Bajar más rápido",
       "Caída instantánea",
     ]) {
-      await expect(page.getByRole("button", { name: label })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: label }).first(),
+      ).toBeVisible();
     }
     await expect(page.locator(".crt-screen").first()).toHaveClass(/tetris/);
   });
@@ -1187,6 +1212,31 @@ test.describe("buscaminas", () => {
     await page.getByRole("button", { name: "REANUDAR" }).click();
     await expect(page.getByText("EN PAUSA")).toHaveCount(0);
   });
+
+  /**
+   * SPEC 23: `toggleFlag()` siempre actualizó `state.flags` bien — el defecto
+   * era que el bucle de `requestAnimationFrame` revelaba y marcaba sin pasar
+   * por `syncLegend()`, así que la tecla F (como la cruceta y el mando) dejaba
+   * el `⚑ 0 / 10` congelado aunque la bandera sí apareciera en el lienzo. El
+   * ratón ya pasaba por `act()` y por eso nunca lo tuvo: por eso esta prueba
+   * es sólo de escritorio, el camino del mando se cubre aparte.
+   */
+  test("la tecla F mueve el contador de banderas de la leyenda", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "el camino del mando se prueba aparte");
+    await openBuscaminas(page);
+
+    const legend = page.locator(".screen-legend");
+    await expect(legend).toContainText("0 / 10");
+
+    await page.keyboard.press("KeyF");
+    await expect(legend).toContainText("1 / 10");
+
+    await page.keyboard.press("KeyF");
+    await expect(legend).toContainText("0 / 10");
+  });
 });
 
 /**
@@ -1513,6 +1563,81 @@ test.describe("mando de consola en móvil", () => {
     antes = await huella("canvas.minas-board");
     await pulsar("Mover el cursor a la derecha", 60);
     expect(await huella("canvas.minas-board")).not.toBe(antes);
+  });
+
+  /**
+   * SPEC 23: TETRIX era el único de los cuatro con un hueco en la silueta del
+   * mando —B sin acción—. Deja de serlo: B pasa a rotar, lo mismo que ▲, así
+   * que ya no queda ninguna tecla apagada en este juego.
+   */
+  test("B rota la pieza en TETRIX, igual que ▲", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    // Cuatro brazos, dos círculos y las dos pastillas: los ocho activos, cero
+    // apagados — la silueta completa, nada atenuado.
+    await expect(page.locator(".game-pad .is-off")).toHaveCount(0);
+    await expect(page.locator(".game-pad").getByRole("button")).toHaveCount(8);
+
+    const botonB = page.locator(".game-pad .pad-slot-b button");
+    await expect(botonB).toHaveAttribute("aria-label", "Rotar la pieza");
+    await botonB.scrollIntoViewIfNeeded();
+
+    const huella = () =>
+      page
+        .locator("canvas.tetris-board")
+        .screenshot()
+        .then((b) => b.toString("base64"));
+    const antes = await huella();
+
+    const caja = await botonB.boundingBox();
+    if (!caja) throw new Error("sin caja: B");
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(60);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    expect(await huella()).not.toBe(antes);
+  });
+
+  /**
+   * SPEC 23: el camino que reportó el usuario. `toggleFlag()` ya marcaba bien
+   * la celda —se ve en el lienzo— pero el mando entra por el bucle de
+   * `requestAnimationFrame`, que no llamaba a `syncLegend()`, así que el
+   * `⚑ 0 / 10` de la leyenda no se movía nunca desde aquí.
+   */
+  test("el botón B mueve el contador de banderas de BUSCAMINAS", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/buscaminas");
+    await expect(page.locator(".game-pad")).toBeVisible();
+
+    const legend = page.locator(".screen-legend");
+    await expect(legend).toContainText("0 / 10");
+
+    const botonB = page.locator(".game-pad .pad-slot-b button");
+    await expect(botonB).toHaveAttribute("aria-label", "Marcar con bandera");
+    await botonB.scrollIntoViewIfNeeded();
+
+    const caja = await botonB.boundingBox();
+    if (!caja) throw new Error("sin caja: B");
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(60);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    await expect(legend).toContainText("1 / 10");
+
+    // Soltarla la devuelve: la misma celda, segunda pulsada.
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(60);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    await expect(legend).toContainText("0 / 10");
   });
 
   test("los controles táctiles sobre el lienzo siguen vivos", async ({

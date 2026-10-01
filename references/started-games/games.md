@@ -82,7 +82,11 @@ Four rules hold the pad together:
   `aria-hidden`.
 - **What a game does not use is still drawn.** Unused directions and the unused action button render as
   dimmed inert `<span>`s — no role, no focus, no pointer events — so the silhouette is identical in all
-  four.
+  four. `TETRIX` no longer has one of these: SPEC 23 gave its `B` the same action as `▲`
+  (`buttons: ["Caída instantánea", "Rotar la pieza"]`, `press(rotate, false)`, no repeat — holding it
+  down must not spin the piece) so a right thumb resting on `B` has something to do instead of a dead
+  key. `ASTEROIDES` and `ARKANOID` keep their inert `B`, and `ARKANOID` keeps its three inert vertical
+  arms too — the test that watches inert keys anchors on `ARKANOID`, not `TETRIX`, so it did not move.
 
 `PAUSA` and `MENÚ` are the same two pills in every game, wired to `GamePlayer`'s own `togglePause` and
 `openMenu` — the same functions the HUD uses, not new ones. The pad's three colours: the D-pad is
@@ -162,6 +166,13 @@ Nothing on the pad, and no `.btn` anywhere, can be selected by a finger: `user-s
 `.game-pad` as a whole, not only on `.pad-key`. What a long press actually selected was the label
 **under** the key — the `A`, the `B`, the arrow — and those are siblings of the button, not children
 of it, so a rule on the key alone never reached them.
+
+SPEC 23 widened that rule to the whole player: `.av-player` carries `user-select: none`,
+`-webkit-user-select: none`, `-webkit-touch-callout: none` and `-webkit-tap-highlight-color:
+transparent`, so the HUD, the signal band, the legend, the score strip, the tube's own footer and the
+`MENÚ` panel stop opening iOS's copy menu on a held finger too — the same defect the pad already had,
+just spread across six containers the pad rule never reached. One rule on the container, not one per
+container, on purpose: that list would need remembering every time the tube grows another band.
 
 Two constraints on anything added to it. **The panel never scrolls** — at 390px the tube is about
 300px tall (`0.75 × width + 68`) and the tallest branch is a guest at game-over: seven stacked
