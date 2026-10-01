@@ -27,7 +27,7 @@ in this file is a spec, and nothing in it has been agreed to be built.
 
 | #   | Name      | Slug        | Category | Status      | Proposed   | Verdict                                                          |
 | --- | --------- | ----------- | -------- | ----------- | ---------- | ---------------------------------------------------------------- |
-| 1   | SERPIENTE | `serpiente` | ARCADE   | Recommended | 2026-09-28 | Fills the unused `dificultad = 1`, a new verb, the smallest rules surface of the five engines |
+| 1   | SERPIENTE | `serpiente` | ARCADE   | Shipped     | 2026-09-28 | Fills the unused `dificultad = 1`, a new verb, the smallest rules surface of the five engines |
 | 2   | RANA      | `rana`      | ARCADE   | Proposed    | 2026-09-28 | Zero RNG, the best determinism handle on the shortlist; largest rules surface of the three |
 | 3   | SIMÓN     | `simon`     | ARCADE   | Proposed    | 2026-09-28 | Cheapest engine possible, but the leaderboard compresses at the human memory ceiling |
 | 4   | DUELO     | `duelo`     | VERSUS   | Rejected    | 2026-09-28 | Gate 7 — two seats, one Supabase session, one `auth.uid()`: the second player has no leaderboard identity |
@@ -86,9 +86,10 @@ in this file is a spec, and nothing in it has been agreed to be built.
   new `categorias` row. New: a `cover-serpiente` class in `app/globals.css` and a PNG in
   `public/juegos/` — both of which all four precedents also have. Rules surface is the **smallest of
   the five engines**, under `lib/buscaminas.ts`'s 247 lines.
-- **Decision** — `Recommended`, 2026-09-28. Top of the shortlist at 24 points: it is the only
-  candidate that fills an actually empty column (`dificultad = 1`) while bringing a new verb, a new
-  input model and the cheapest engine but one.
+- **Decision** — `Shipped`, 2026-10-01 (`Recommended`, 2026-09-28). Top of the shortlist at 24
+  points: it is the only candidate that fills an actually empty column (`dificultad = 1`) while
+  bringing a new verb, a new input model and the cheapest engine but one. Prototype ported to
+  [`06-serpiente/`](06-serpiente/); the catalog row is the migration's, not this entry's.
 
 ### 02 — RANA
 

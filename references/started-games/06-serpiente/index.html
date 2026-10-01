@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Serpiente</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+    }
+
+    canvas {
+      display: block;
+      border: 1px solid #222;
+    }
+
+    .controls {
+      width: 190px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-family: monospace;
+      color: #fff;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .controls-label {
+      display: block;
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: #0f0;
+      margin-bottom: 8px;
+    }
+
+    .key-btn {
+      appearance: none;
+      background: rgba(0, 255, 0, 0.06);
+      border: 1.5px solid #0f0;
+      border-radius: 6px;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 16px;
+      padding: 10px 0;
+      box-shadow: 0 0 6px rgba(0, 255, 0, 0.35);
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+      transition: background 0.1s, box-shadow 0.1s;
+    }
+
+    .key-btn:active,
+    .key-btn.is-active {
+      background: rgba(0, 255, 0, 0.35);
+      box-shadow: 0 0 14px rgba(0, 255, 0, 0.75);
+    }
+
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .dpad .up { grid-column: 2; }
+    .dpad .left { grid-column: 1; grid-row: 2; }
+    .dpad .down { grid-column: 2; grid-row: 2; }
+    .dpad .right { grid-column: 3; grid-row: 2; }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .action {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .action-label {
+      font-size: 9px;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.7);
+      text-align: center;
+    }
+
+    .action .key-btn {
+      width: 100%;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    .hud-section {
+      border-top: 1px solid #222;
+      padding-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .hud-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 6px 10px;
+      border: 1px solid #222;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <canvas id="canvas" width="576" height="432"></canvas>
+
+    <aside class="controls">
+      <div>
+        <span class="controls-label">GIRO</span>
+        <div class="dpad">
+          <button class="key-btn up" data-code="ArrowUp">▲</button>
+          <button class="key-btn left" data-code="ArrowLeft">◀</button>
+          <button class="key-btn down" data-code="ArrowDown">▼</button>
+          <button class="key-btn right" data-code="ArrowRight">▶</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <div class="action">
+          <span class="action-label">REINICIAR (FIN DE PARTIDA)</span>
+          <button class="key-btn" data-code="Space">SPACE</button>
+        </div>
+      </div>
+
+      <div class="hud-section">
+        <div class="hud-row">
+          <span>⚡ NIVEL</span>
+          <span id="hud-level">1</span>
+        </div>
+        <div class="hud-row">
+          <span>🐍 LONGITUD</span>
+          <span id="hud-length">4</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
