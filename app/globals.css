@@ -3618,6 +3618,30 @@
   background: linear-gradient(90deg, rgba(217, 122, 58, 0.1), transparent);
 }
 
+/* Esqueleto de "ACTIVIDAD EN VIVO" mientras carga /api/home-activity: mismas
+   filas y alto que los datos reales, sin texto inventado. */
+.tick-row.skeleton,
+.top-row.skeleton {
+  opacity: 1;
+  animation: none;
+}
+.skeleton-bar {
+  display: inline-block;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--line-2);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
 /* Precios y FAQ. */
 .pricing-grid {
   display: grid;
