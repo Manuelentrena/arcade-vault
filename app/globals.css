@@ -2477,15 +2477,18 @@
    debajo, nunca encima del campo, porque la serpiente puede estar en cualquier
    celda incluida la última fila. La pausa tampoco vive aquí: es el botón del
    HUD. */
+/* Columna lateral, como `.minas-stage`, no franja debajo: la cruceta vive a la
+   derecha del tablero en vez de en una banda propia bajo él. El tablero sigue
+   siendo 480 × 360 (4 / 3 exacto), así que no hace falta ningún modificador de
+   `.crt-screen` tampoco con este reparto. */
 .snake-stage {
   position: absolute;
   inset: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(6px, 1.5%, 14px);
-  padding: clamp(6px, 1.5%, 14px);
+  gap: clamp(8px, 2%, 20px);
+  padding: clamp(8px, 2%, 18px);
   /* El mismo resplandor que `.tetris-stage` y `.minas-stage`, no uno verde
      propio: el tubo es el mismo mueble en los cinco juegos y el color del
      juego lo ponen sus piezas, no su fondo. El lienzo se limpia con
@@ -2497,39 +2500,58 @@
     transparent 25%
   );
 }
-/* La altura manda: el ancho sale de la proporción 4 / 3 del tablero. */
 .snake-board {
   display: block;
-  height: 100%;
   width: auto;
+  height: auto;
   max-width: 100%;
-  min-height: 0;
-  aspect-ratio: 4 / 3;
+  max-height: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
   image-rendering: pixelated;
 }
-/* Franja propia bajo el tablero: la cruz de cuatro teclas, ▲ centrado arriba y
-   ◀ ▼ ▶ debajo. Sin repetición al mantener —la serpiente ya se mueve sola—, así
-   que son cuatro pulsaciones y nada más. */
-.snake-pad {
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  gap: 6px;
+.snake-side {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  align-items: center;
   justify-content: center;
+  gap: clamp(8px, 2%, 14px);
+  width: clamp(84px, 22%, 180px);
+  flex: 0 0 auto;
+}
+.snake-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.snake-side .l {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--ink-faint);
+  letter-spacing: 0.16em;
+}
+/* La cruz de cuatro teclas, ▲ centrado arriba y ◀ ▼ ▶ debajo. Sin repetición
+   al mantener —la serpiente ya se mueve sola—, así que son cuatro pulsaciones
+   y nada más. */
+.snake-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: 100%;
 }
 .snake-pad .btn {
-  opacity: 0.75;
-  background: rgba(0, 0, 0, 0.45);
+  padding: 0;
+  gap: 0;
+  aspect-ratio: 1 / 1;
   font-family: var(--mono);
+  font-size: 15px;
   letter-spacing: 0;
-  padding: 6px 14px;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-}
-.snake-pad .btn:active,
-.snake-pad .btn:focus-visible {
-  opacity: 1;
 }
 /* Posición explícita en las cuatro, como `.minas-pad`: con una sola fijada,
    la colocación automática de las otras tres depende del orden del DOM. */
@@ -2549,7 +2571,7 @@
   grid-column: 3;
   grid-row: 2;
 }
-/* `.snake-pad` se oculta a ≤ 720px desde el bloque del mueble (SPEC 21): en
+/* `.snake-side` se oculta a ≤ 720px desde el bloque del mueble (SPEC 21): en
    móvil conduce el mando de abajo y el lienzo se queda con toda la banda. */
 
 /* ===== auth ===== */
@@ -2988,7 +3010,7 @@
   .rocks-side,
   .minas-side,
   .ark-pad,
-  .snake-pad {
+  .snake-side {
     display: none;
   }
   /* A TETRIX le queda una columna estrecha con solo SIGUIENTE, que es estado

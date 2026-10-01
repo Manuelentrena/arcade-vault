@@ -362,37 +362,42 @@ function SerpienteGameImpl({
           role="img"
           aria-label="Tablero de SERPIENTE"
         />
-        {/* Franja propia bajo el tablero, nunca encima: la serpiente puede
+        {/* Columna lateral, nunca encima del tablero: la serpiente puede
             estar en cualquier celda, incluida la última fila. */}
-        <div className="snake-pad">
-          <button
-            {...padProps(DIRS.up)}
-            className="btn pad-up"
-            aria-label="Girar hacia arriba"
-          >
-            ↑
-          </button>
-          <button
-            {...padProps(DIRS.left)}
-            className="btn pad-left"
-            aria-label="Girar a la izquierda"
-          >
-            ←
-          </button>
-          <button
-            {...padProps(DIRS.down)}
-            className="btn pad-down"
-            aria-label="Girar hacia abajo"
-          >
-            ↓
-          </button>
-          <button
-            {...padProps(DIRS.right)}
-            className="btn pad-right"
-            aria-label="Girar a la derecha"
-          >
-            →
-          </button>
+        <div className="snake-side">
+          <div className="snake-block">
+            <span className="l">GIRO</span>
+            <div className="snake-pad">
+              <button
+                {...padProps(DIRS.up)}
+                className="btn pad-up"
+                aria-label="Girar hacia arriba"
+              >
+                ↑
+              </button>
+              <button
+                {...padProps(DIRS.left)}
+                className="btn pad-left"
+                aria-label="Girar a la izquierda"
+              >
+                ←
+              </button>
+              <button
+                {...padProps(DIRS.down)}
+                className="btn pad-down"
+                aria-label="Girar hacia abajo"
+              >
+                ↓
+              </button>
+              <button
+                {...padProps(DIRS.right)}
+                className="btn pad-right"
+                aria-label="Girar a la derecha"
+              >
+                →
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </>

@@ -61,7 +61,7 @@ Y una cosa **sí cambia de número**: la rejilla pasa de 24 × 18 a **20 × 15**
 - `components/game-player.tsx:66-77` — `EngineProps` vivo: `{ paused, onTogglePause, onRun, onOver, initialLives, maxLevel, padRef }`. El `padRef` de SPEC 21 es obligatorio; `BUSCAMINAS` es el precedente de declarar un tipo local estructuralmente idéntico.
 - **No queda ninguna regla `.crt-screen.tetris` / `.rocks` / `.minas` en `app/globals.css`.** SPEC 21 las eliminó: `.crt-screen` es `4 / 3` en escritorio y `aspect-ratio: auto` con tres bandas apiladas a ≤ 720px, y la proporción del juego la lleva el escenario. Los valores `screen` que quedan en `ENGINES` son ganchos vestigiales sin CSS detrás. **`SERPIENTE` entra con `screen: ""`**, como `ARKANOID`, porque no hay nada que modificar.
 - `app/globals.css:2807-2821` — la lista `.tetris-stage, .rocks-stage, .ark-stage, .minas-stage` es la que pone `aspect-ratio: 4 / 3; min-height: 0; overflow: hidden` a la banda del juego en móvil. **Es una lista literal: hay que añadir `.snake-stage` o la banda nueva no mide como las otras cuatro** — y hay un test que lo comprueba (§3.9).
-- `app/globals.css:2859-2864` — la lista `.tetris-side > .tetris-block:not(.tetris-next), .rocks-side, .minas-side, .ark-pad` es la que oculta los mandos de dentro del tubo a ≤ 720px. **También es literal: hay que añadir `.snake-pad`.**
+- `app/globals.css:2859-2864` — la lista `.tetris-side > .tetris-block:not(.tetris-next), .rocks-side, .minas-side, .ark-pad` es la que oculta los mandos de dentro del tubo a ≤ 720px. **También es literal: hay que añadir `.snake-side`** (la columna entera, no `.snake-pad`, que es un hijo suyo).
 - `lib/supabase/games.ts:13-33` — `Game` completo: `id, title, short, long, cat, cover, image, color, best, plays, dificultad, jugadores, perifericos, vidas, niveles`.
 - `lib/supabase/games.ts:85-99` — `getGames()` ordena `.order("created_at").order("slug")`. Los tres primeros juegos comparten `created_at` (un solo `insert` en su migración) y se desempatan alfabéticamente, así que el orden vivo es **`arkanoid`, `asteroides`, `tetrix`, `buscaminas`** — probado por dos tests a la vez: `tests/screens.spec.ts:302` (la primera `.mini-card` enlaza a `/juego/arkanoid`) y `:395-404` (el chip `PUZZLE` pinta `TETRIX` antes de `BUSCAMINAS`). Una migración nueva trae un `created_at` posterior, así que **`SERPIENTE` entra al final** y no desplaza nada.
 - `components/hall-of-fame.tsx:26` — pestaña por defecto `games[0].id`, que hoy es **`arkanoid`**, no `tetrix` (la prosa de SPEC 20 §1.3 es de antes del desempate por `slug`). No cambia.
@@ -78,6 +78,7 @@ Y una cosa **sí cambia de número**: la rejilla pasa de 24 × 18 a **20 × 15**
 | El chip `ARCADE` pasa de una tarjeta a dos  | `arkanoid` deja de estar solo en su categoría. No hay test que lo cuente hoy; se añade uno (§3.9).                                                                                                     |
 | `JUEGOS` del bloque de mando móvil pasa a 5 | `tests/screens.spec.ts:1441`. Cinco tests recorren ese array y `SERPIENTE` tiene que pasarlos todos.                                                                                                   |
 | La lista de selectores de escenario         | `tests/screens.spec.ts:1687` (`.tetris-stage, .rocks-stage, .ark-stage, .minas-stage`) y `app/globals.css:2807`: las dos son literales y suman `.snake-stage`.                                         |
+| La lista que oculta mandos en móvil         | `app/globals.css:2859`: literal, suma `.snake-side` (no `.snake-pad`).                                                                                                                                 |
 | La tabla de mandos de escritorio            | `tests/screens.spec.ts:1925-1930` suma `["serpiente", ".snake-pad .btn"]`.                                                                                                                             |
 | Cuatro capturas de referencia               | `home-*` (una tarjeta más en el `.mini-rail`) y `biblioteca-*` (una más en la rejilla), en los dos proyectos. `salon-*` sólo si el chip nuevo mueve visualmente la fila de pestañas: se revisa a mano. |
 | Prosa desmentida                            | `README.md` («cuatro juegos»), la sección «Project» de `CLAUDE.md` y `references/started-games/games.md`, que se titula «The four games».                                                              |
@@ -282,45 +283,44 @@ Estructura interna, copiada del patrón de `components/tetris-game.tsx`, que es 
 3. **Aviso al HUD.** `publish()` compara `score`/`lives`/`level` con el último aviso y sólo entonces llama a `onRun` — mismo patrón que los otros cuatro.
 4. **Canvas.** Tamaño lógico `WIDTH × HEIGHT` (480 × 360), escalado por `devicePixelRatio`. Se pinta: rejilla tenue, fruta, cuerpo (atenuándose hacia la cola, para leer de un vistazo la propia trayectoria) y cabeza con los ojos orientados al rumbo. **Nada más**: ni puntuación, ni vidas, ni nivel.
 5. **Teclado.** Las cuatro flechas llaman a `enqueueDir`, **por flanco y sin repetición** — no hay `setInterval` de repetición como en `TETRIX`, porque mantener una flecha pulsada en un snake no significa nada: la serpiente ya se mueve sola, y una repetición sólo llenaría la cola con el mismo rumbo que `enqueueDir` descarta. Las cuatro llevan `preventDefault()` o la página se desplaza. `P` llama a `onTogglePause` — nunca estado local.
-6. **Cruceta de escritorio.** Cuatro `.btn` en `.snake-pad`, en una cruz de tres columnas, **sin repetición al mantener** (coherente con el teclado). Es el único control dentro del tubo: no hay botón de pausa, ni `SIGUIENTE`, ni nada más.
+6. **Cruceta de escritorio.** Cuatro `.btn` en `.snake-pad`, dentro de `.snake-side` (columna lateral, patrón de `.minas-side`), en una cruz de tres columnas, **sin repetición al mantener** (coherente con el teclado). Es el único control dentro del tubo: no hay botón de pausa, ni `SIGUIENTE`, ni nada más.
 7. **`padRef` (SPEC 21).** `useImperativeHandle` publica `{ press, release }` enrutando por el **mismo** camino de entrada que ya existe: `up`/`down`/`left`/`right` → `enqueueDir`, `a` → `enqueueTurn(+1)`, `b` → `enqueueTurn(−1)`. `release` es un no-op, porque no hay nada que repita mientras se mantiene — es la primera vez que un motor lo deja vacío, y es correcto: la regla de SPEC 21 es que el motor recibe `press`/`release` y decide, y aquí la decisión es que soltar no significa nada.
 8. **Colores leídos del CSS una sola vez al montar**, con `getComputedStyle`, y literales hex de respaldo — mismo patrón que `PIECE_FALLBACK` en `tetris-game.tsx:38`.
 9. **Reinicio.** Sin lógica propia: `REINICIAR` cambia `runKey` en el reproductor y React remonta con `createState(initialLives)` de cero.
 
 ### 3.4 Reparto dentro de `.crt-screen`
 
-El tablero (480 × 360) es exactamente 4:3, como el de `ARKANOID`, y la serpiente puede estar en **cualquier** celda de la rejilla, incluida la última fila. Así que se adopta el patrón de `ARKANOID` (`.ark-stage`): **columna, tablero arriba y los mandos en franja propia debajo, nunca encima del campo** — el error que SPEC 15 §8 ya tuvo que corregir y que SPEC 20 §6 decidió no repetir.
+El tablero (480 × 360) es exactamente 4:3, y la serpiente puede estar en **cualquier** celda de la rejilla, incluida la última fila. La decisión original de esta spec adoptaba el patrón de `ARKANOID` (franja de mandos debajo del tablero); **se revisó durante la implementación, a petición explícita, por el de `BUSCAMINAS`** (`.minas-stage`): **columna, tablero a la izquierda y los mandos en una columna lateral a la derecha**, nunca encima del campo. El motivo de la corrección no es técnico — el patrón de `ARKANOID` también evita el solape —, es de consistencia visual: `BUSCAMINAS` es el otro juego que no cae y cuyo cursor también puede estar en cualquier celda, así que comparte exactamente el mismo problema de reparto, y los dos deben leerse como la misma familia de pantalla en vez de que cada uno resuelva el "mando no tapa el tablero" con una silueta distinta.
 
 ```
-┌─ .crt-screen ───────────────────────┐
-│  .screen-signal   SEÑAL OK · SERPIENTE │
-│  .screen-legend        LEYENDA         │   ← sólo visible a ≤ 720px
-│ ┌─ .snake-stage ────────────────────┐ │
-│ │        ┌──────────────┐           │ │
-│ │        │              │           │ │
-│ │        │   20 × 15    │           │ │
-│ │        │              │           │ │
-│ │        └──────────────┘           │ │
-│ │             [▲]                    │ │
-│ │          [◀][▼][▶]   .snake-pad   │ │
-│ └───────────────────────────────────┘ │
-│  .screen-stats   PTS · VIDAS · NIVEL   │   ← sólo visible a ≤ 720px
-└─────────────────────────────────────┘
+┌─ .crt-screen ─────────────────────────────┐
+│  .screen-signal     SEÑAL OK · SERPIENTE     │
+│  .screen-legend          LEYENDA             │   ← sólo visible a ≤ 720px
+│ ┌─ .snake-stage ──────────────────────────┐ │
+│ │ ┌──────────────┐                        │ │
+│ │ │              │     GIRO               │ │
+│ │ │   20 × 15    │      [▲]               │ │
+│ │ │              │   [◀][▼][▶]  .snake-side│ │
+│ │ └──────────────┘                        │ │
+│ └──────────────────────────────────────────┘ │
+│  .screen-stats     PTS · VIDAS · NIVEL       │   ← sólo visible a ≤ 720px
+└───────────────────────────────────────────┘
 ```
 
-Clases nuevas en `app/globals.css`, en un bloque hermano de `.ark-*`:
+Clases nuevas en `app/globals.css`, en un bloque hermano de `.minas-*`:
 
-- `.snake-stage` — igual que `.ark-stage`: `position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(6px, 1.5%, 14px); padding: clamp(6px, 1.5%, 14px);` con el mismo fondo `radial-gradient` compartido.
-- `.snake-board` — igual que `.ark-board`: `height: 100%; width: auto; max-width: 100%; min-height: 0; aspect-ratio: 4 / 3; image-rendering: pixelated;`. **La altura manda y el ancho sale de la proporción.** Sin `touch-action: none`: no hay arrastre que proteger.
-- `.snake-pad` — `flex: none;` y una rejilla de tres columnas con `▲` centrado arriba y `◀ ▼ ▶` debajo, con la misma atenuación al reposo y aclarado al pulsar que `.ark-pad .btn` (`opacity: .75` → `1`).
+- `.snake-stage` — igual que `.minas-stage`: `position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2%, 20px); padding: clamp(8px, 2%, 18px);` con el mismo fondo `radial-gradient` compartido.
+- `.snake-board` — igual que `.minas-board`: `width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: 0; border: 1px solid var(--line);`. Sin `touch-action: none` ni `cursor: pointer`: no hay arrastre que proteger ni ratón que señale una celda.
+- `.snake-side` — columna lateral igual que `.minas-side`: `display: flex; flex-direction: column; align-self: stretch; align-items: center; justify-content: center; gap: clamp(8px, 2%, 14px); width: clamp(84px, 22%, 180px); flex: 0 0 auto;`, con un único `.snake-block` dentro (rótulo `GIRO` + la cruceta) — a diferencia de `.minas-side`, que lleva tres bloques (`MOVIMIENTO`/`REVELAR`/`MARCAR`).
+- `.snake-pad` — dentro de `.snake-block`, rejilla de tres columnas con `▲` arriba y `◀ ▼ ▶` debajo, mismo patrón de `.minas-pad` (celdas cuadradas por `aspect-ratio: 1 / 1`).
 
-**Aritmética a 1440 px** (medida en el navegador, no calculada). `.crt-screen` mide 1004 × 753. El escenario se lleva 14 px de padding arriba y abajo, 14 de `gap`, y la cruceta 64. Al tablero le quedan 650 px de alto; a 4:3 son 867 px de ancho, por debajo de los `1004 − 28 = 976` disponibles, así que **manda la altura**: el tablero se dibuja a **866,8 × 650,1** y la celda mide **43,3** px, cuadrada.
+**Aritmética a 1440 px** (medida en el navegador). `.crt-screen` mide 1004 × 753. Con la columna lateral de hasta 180 px más el `gap`, al tablero le sobra espacio de ancho y de alto — a diferencia de `ARKANOID`/`BUSCAMINAS`, cuyo tablero nativo (800×600 y 576×432) es mayor que el hueco disponible y por eso lo llena, aquí el tablero nativo (480×360) es **menor** que el hueco, así que `width/height: auto` lo deja en su tamaño real: el canvas se dibuja a **482 × 362** (480×360 más el borde de 1 px) y la celda mide **24,1** px — el mismo `CELL = 24` del motor, sin escalar.
 
-**Aritmética a 390 px** (medida en el navegador). `.crt-screen` deja de ser una proporción y apila cuatro bandas (SPEC 21); la del juego es `.snake-stage` con su propio `aspect-ratio: 4 / 3`, así que hay que darla de alta en la lista literal de `app/globals.css:2807` o la banda no mide como las otras cuatro. El tubo mide **355** px de ancho —no los ~309 que daba el cálculo a partir de `0.75 × ancho + 68`—, así que la banda sale a 355 × 266,3 (proporción 1,333 exacta) y el tablero a **339 × 254,3**, con la celda en **16,95 px**.
+**Aritmética a 390 px** (medida en el navegador, sin cambios respecto a la versión anterior de esta spec: el reparto de escritorio no afecta a móvil). `.crt-screen` deja de ser una proporción y apila cuatro bandas (SPEC 21); la del juego es `.snake-stage` con su propio `aspect-ratio: 4 / 3`, así que hay que darla de alta en la lista literal de `app/globals.css:2807` o la banda no mide como las otras cuatro. El tubo mide **355** px de ancho, así que la banda sale a 355 × 266,3 (proporción 1,333 exacta) y el tablero a **339 × 254,3**, con la celda en **16,95 px**.
 
-Ese número queda por debajo de los 18 px que `BUSCAMINAS` midió como suelo —aunque muy cerca—, y lo importante es que **no es el mismo suelo**. En `BUSCAMINAS` la celda es un objetivo táctil: el dedo tiene que acertar una casilla concreta. En `SERPIENTE` **ninguna celda es nunca un objetivo** — se conduce con cuatro teclas del mando —, así que el suelo aquí es de legibilidad, no de pulgar: hace falta ver dónde está la cabeza y dónde la fruta, y 14,6 px con la cabeza en un verde claro y la fruta en rojo lo cumplen de sobra. Por eso la rejilla baja de los 24 × 18 del prototipo a 20 × 15: a 24 columnas la celda caería a ~14,1 px, que ya es fina para distinguir cuerpo de fondo en un tubo con scanlines.
+Ese número queda por debajo de los 18 px que `BUSCAMINAS` midió como suelo —aunque muy cerca—, y lo importante es que **no es el mismo suelo**. En `BUSCAMINAS` la celda es un objetivo táctil: el dedo tiene que acertar una casilla concreta. En `SERPIENTE` **ninguna celda es nunca un objetivo** — se conduce con cuatro teclas del mando —, así que el suelo aquí es de legibilidad, no de pulgar: hace falta ver dónde está la cabeza y dónde la fruta, y 16,95 px con la cabeza en un verde claro y la fruta en rojo lo cumplen de sobra. Por eso la rejilla baja de los 24 × 18 del prototipo a 20 × 15: a 24 columnas la celda caería a ~14,1 px, que ya es fina para distinguir cuerpo de fondo en un tubo con scanlines.
 
-`.snake-pad` entra también en la lista literal de `app/globals.css:2859`, la que oculta los mandos de dentro del tubo a ≤ 720px: en móvil conduce el mando de abajo y el lienzo se queda con toda la banda.
+`.snake-side` entra en la lista literal de `app/globals.css:2859` (no `.snake-pad`, que es un hijo suyo): es la que oculta los mandos de dentro del tubo a ≤ 720px, y es la columna entera — rótulo incluido — la que debe desaparecer, mismo criterio que `.minas-side`. En móvil conduce el mando de abajo y el lienzo se queda con toda la banda.
 
 **Banda de leyenda.** `SERPIENTE` no tiene nada que explicar — ni power-ups como `ASTEROIDES`/`ARKANOID`, ni contadores como `BUSCAMINAS` —, así que reserva la banda y pinta `LEYENDA` centrado con `.screen-legend-empty`, exactamente como `TETRIX` (`components/tetris-game.tsx:435-437`). La banda se reserva igual: la regla de SPEC 21 es que **todos** los juegos la reservan, para que los cinco midan lo mismo.
 
@@ -465,9 +465,9 @@ Cada paso deja el proyecto compilando y la suite en un estado conocido.
 - [ ] `REINICIAR` devuelve serpiente nueva de longitud 4, `0` puntos, `Nivel 01` y un corazón.
 - [ ] `GUARDAR PUNTUACIÓN` guarda de verdad cuando la partida es récord del jugador (vía `save_score`); con sesión de invitado el panel pide iniciar sesión y lleva a `/auth` con la puntuación y el nivel en la URL.
 - [ ] El HUD de `/jugar/serpiente` es idéntico al de los otros cuatro juegos, y la silueta del mando en móvil también (cuatro brazos, dos círculos, las etiquetas `B`/`A`/`PAUSA`/`MENÚ`).
-- [ ] A 1440 px el tablero se dibuja a ~867 × 650 (celda ~43 px) con la cruceta en una franja debajo, sin tapar ninguna celda.
+- [ ] A 1440 px el tablero se dibuja a su tamaño nativo (~482 × 362, celda ~24 px) con la columna `GIRO` a la derecha, sin tapar ninguna celda.
 - [ ] A 390 px la banda del juego mide lo mismo que la de los otros cuatro (mismo ancho y alto, ±1 px, y proporción 4/3), con la celda en torno a 17 px.
-- [ ] `.snake-stage` está en la lista de `app/globals.css:2807` y `.snake-pad` en la de `:2859`.
+- [ ] `.snake-stage` está en la lista de `app/globals.css:2807` y `.snake-side` en la de `:2859`.
 - [ ] `.cover-snake` existe y se usa como respaldo mientras no haya captura; `cover-shot` la sustituye en cuanto exista `public/juegos/serpiente.png`.
 - [ ] `lib/serpiente.ts` no referencia `document`, `window` ni `canvas`, y no siembra ningún generador de números aleatorios propio.
 - [ ] No se añade ningún token de color nuevo a `:root`.
@@ -505,8 +505,8 @@ Cada paso deja el proyecto compilando y la suite en un estado conocido.
 - **Sí:** muro mortal, sin bordes que envuelvan. Es la referencia y es la mitad de la tensión del juego; con wrap, la rejilla deja de tener forma.
 - **Sí:** sin estado de victoria. La puntuación es monótona y el nivel no tiene techo — es lo que mantiene el marcador abierto, y es precisamente el gate que el `game-planner` usó para rechazar `ALMACÉN`.
 - **Sí:** fruta elegida de la **lista de celdas libres**. El muestreo con rechazo degenera a medida que la serpiente ocupa la rejilla; recorrer las libres no, y 300 celdas es una lista barata.
-- **Sí:** patrón de `ARKANOID` para el escenario — tablero arriba, mandos en franja propia debajo. La serpiente puede estar en cualquier celda, incluida la última fila, así que superponer mandos sobre el tablero repetiría el error que SPEC 15 §8 ya corrigió y que SPEC 20 §6 decidió no repetir.
-- **No:** columna lateral como `TETRIX`/`ASTEROIDES`/`BUSCAMINAS`. Con la franja debajo el tablero se lleva 645 px de alto en escritorio (celda de 43 px) frente a los 576 de la columna (38 px): más tablero, y el único control que hay es una cruz de cuatro teclas que cabe de sobra en una franja.
+- **Sí:** columna lateral para el escenario — tablero a la izquierda, `GIRO` y la cruceta en `.snake-side` a la derecha, patrón de `BUSCAMINAS` (`.minas-stage`/`.minas-side`). Decisión revisada durante la implementación, a petición explícita, sobre la redacción original de esta spec (que adoptaba el patrón de franja debajo de `ARKANOID`). La serpiente puede estar en cualquier celda, incluida la última fila, así que superponer mandos sobre el tablero sigue sin ser opción — el error que SPEC 15 §8 corrigió y que SPEC 20 §6 decidió no repetir —, pero entre las dos formas de evitarlo se prefiere la que ya usa `BUSCAMINAS`, el otro juego con el mismo problema (cursor en cualquier celda), para que los dos se lean como la misma familia de pantalla.
+- **No:** patrón de `ARKANOID` (franja de mandos debajo del tablero). Era la decisión original y es técnicamente válida — el tablero nativo (480×360) cabe de sobra en cualquiera de los dos repartos —, pero deja a `SERPIENTE` sin parecido con `BUSCAMINAS`, que resuelve el mismo problema de forma distinta sin necesidad: no hay ninguna restricción de espacio que obligue a diferenciarlos.
 - **Sí:** `screen: ""` como `ARKANOID`. El tablero ya es el 4:3 del tubo y, además, **SPEC 21 eliminó todas las reglas `.crt-screen.<modificador>`**: añadir un valor nuevo ahí sería declarar un gancho sin CSS detrás.
 - **Sí:** los dos botones del mando giran 90° en **relativo** (A derecha, B izquierda) en vez de quedar inertes. Mismo argumento con el que SPEC 23 revivió la `B` de `TETRIX`: un pulgar apoyado en los círculos necesita algo que hacer, y `SERPIENTE` sería el primer juego con los dos muertos. Además es cómo se juega un snake con dos botones, así que no es una mecánica inventada.
 - **No:** un solo botón que «cambie de eje». Un botón cuyo efecto depende del rumbo es el que peor se lee de las tres opciones: con rumbo `→`, ¿sube o baja?
