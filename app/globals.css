@@ -1037,6 +1037,52 @@
   text-shadow: 0 0 8px var(--green);
 }
 
+/* SERPIENTE (SPEC 25). Dibujada desde cero como `.cover-minas`: no hay ninguna
+   clase huérfana que reciclar. Un recorrido en zigzag de celdas verdes sobre la
+   rejilla tenue, con la fruta roja delante de la cabeza. */
+.cover-snake {
+  background:
+    repeating-linear-gradient(
+        90deg,
+        transparent 0 26px,
+        var(--ink-faint) 26px 27px
+      )
+      0 0/100% 100%,
+    repeating-linear-gradient(
+        0deg,
+        transparent 0 26px,
+        var(--ink-faint) 26px 27px
+      )
+      0 0/100% 100%,
+    #06111a;
+  opacity: 1;
+}
+/* Cian para el cuerpo y magenta para la fruta: los dos colores del logo
+   (`ARCADE` en cian, `VAULT` en magenta), no un verde/rojo propios. */
+.cover-snake::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--cyan), var(--cyan)) 18% 66%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 29% 66%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 29% 50%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 40% 50%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 51% 50%/11% 16%,
+    linear-gradient(var(--cyan), var(--cyan)) 51% 34%/11% 16%;
+  background-repeat: no-repeat;
+  opacity: 0.55;
+}
+.cover-snake::before {
+  content: "●";
+  position: absolute;
+  left: 70%;
+  top: 24%;
+  color: var(--magenta);
+  font-size: 18px;
+  text-shadow: 0 0 10px var(--magenta);
+}
+
 /* ===== detail screen ===== */
 .av-detail {
   display: grid;
@@ -2425,6 +2471,111 @@
 /* `.ark-pad` se oculta a ≤ 720px desde el bloque del mueble (SPEC 21): la fila
    de ←/LANZAR/→ vive ahora en el mando de abajo. */
 
+/* ===== SERPIENTE — quinto escenario REAL dentro del CRT (SPEC 25) =====
+   El tablero es 480 × 360, o sea el mismo 4 / 3 de .crt-screen, así que no
+   necesita ningún modificador de proporción —y desde la SPEC 21 ya no existe
+   ninguna regla `.crt-screen.<modificador>` que añadir—. El escenario es la
+   columna de ARKANOID: tablero arriba y la cruceta en una franja propia
+   debajo, nunca encima del campo, porque la serpiente puede estar en cualquier
+   celda incluida la última fila. La pausa tampoco vive aquí: es el botón del
+   HUD. */
+/* Columna lateral, como `.minas-stage`, no franja debajo: la cruceta vive a la
+   derecha del tablero en vez de en una banda propia bajo él. El tablero sigue
+   siendo 480 × 360 (4 / 3 exacto), así que no hace falta ningún modificador de
+   `.crt-screen` tampoco con este reparto. */
+.snake-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2%, 20px);
+  padding: clamp(8px, 2%, 18px);
+  /* El mismo resplandor que `.tetris-stage` y `.minas-stage`, no uno verde
+     propio: el tubo es el mismo mueble en los cinco juegos y el color del
+     juego lo ponen sus piezas, no su fondo. El lienzo se limpia con
+     `clearRect`, así que este gradiente se ve a través del tablero. */
+  background: radial-gradient(
+    ellipse 45% 70% at 50% 50%,
+    #0a0030 0%,
+    #000 45%,
+    transparent 25%
+  );
+}
+.snake-board {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  image-rendering: pixelated;
+}
+.snake-side {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2%, 14px);
+  width: clamp(84px, 22%, 180px);
+  flex: 0 0 auto;
+}
+.snake-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.snake-side .l {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--ink-faint);
+  letter-spacing: 0.16em;
+}
+/* La cruz de cuatro teclas, ▲ centrado arriba y ◀ ▼ ▶ debajo. Sin repetición
+   al mantener —la serpiente ya se mueve sola—, así que son cuatro pulsaciones
+   y nada más. */
+.snake-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: 100%;
+}
+.snake-pad .btn {
+  padding: 0;
+  gap: 0;
+  aspect-ratio: 1 / 1;
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Posición explícita en las cuatro, como `.minas-pad`: con una sola fijada,
+   la colocación automática de las otras tres depende del orden del DOM. */
+.snake-pad .pad-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+.snake-pad .pad-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.snake-pad .pad-down {
+  grid-column: 2;
+  grid-row: 2;
+}
+.snake-pad .pad-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+/* `.snake-side` se oculta a ≤ 720px desde el bloque del mueble (SPEC 21): en
+   móvil conduce el mando de abajo y el lienzo se queda con toda la banda. */
+
 /* ===== auth ===== */
 .av-auth-wrap {
   display: flex;
@@ -2807,7 +2958,8 @@
   .tetris-stage,
   .rocks-stage,
   .ark-stage,
-  .minas-stage {
+  .minas-stage,
+  .snake-stage {
     position: relative;
     inset: auto;
     flex: 0 0 auto;
@@ -2859,7 +3011,8 @@
   .tetris-side > .tetris-block:not(.tetris-next),
   .rocks-side,
   .minas-side,
-  .ark-pad {
+  .ark-pad,
+  .snake-side {
     display: none;
   }
   /* A TETRIX le queda una columna estrecha con solo SIGUIENTE, que es estado

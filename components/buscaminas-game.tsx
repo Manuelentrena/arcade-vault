@@ -43,6 +43,17 @@ type Palette = {
   flag: string;
   ink: string;
   inkFaint: string;
+  /** Rejilla del tablero: la misma `--line` cian que dibuja TETRIX. */
+  grid: string;
+  /**
+   * Velo de la celda sin descubrir; se pinta con HIDDEN_ALPHA. Es `--ink-faint`
+   * y no un gris de fondo a propósito: distinguir lo descubierto de lo que
+   * falta es la lectura más importante del tablero, y un velo demasiado oscuro
+   * la borra —se probó con `--bg-3` y las dos clases de celda se confundían—.
+   */
+  hidden: string;
+  /** Casilla con mina ya revelada; se pinta con MINE_ALPHA. */
+  mine: string;
 };
 
 const ADJACENCY_VARS = [
@@ -73,13 +84,25 @@ const PALETTE_FALLBACK: Palette = {
   flag: "#ff006e",
   ink: "#e6e9ff",
   inkFaint: "#4a4f70",
+  grid: "rgba(0, 245, 255, 0.18)",
+  hidden: "#4a4f70",
+  mine: "#ff2f45",
 };
 
-/** Fondo del escenario, sin tokenizar: mismo criterio que `.tetris-stage`. */
-const HIDDEN_FILL = "#3a3a3a";
-const REVEALED_FILL = "#161616";
-const REVEALED_MINE_FILL = "#5c1a1a";
-const CELL_BORDER = "#000";
+/**
+ * Opacidades de las celdas. El tablero ya no se pinta con grises planos
+ * (`#3a3a3a` oculta, `#161616` revelada, `#000` de borde) heredados de la
+ * referencia: eran los únicos literales fuera del tema en el lienzo, y además
+ * tapaban por completo el resplandor de `.minas-stage` —el tablero quedaba
+ * como una losa gris dentro de un tubo de neón—.
+ *
+ * Ahora la celda oculta es un velo translúcido sobre ese resplandor, la
+ * revelada no pinta nada (como el hueco vacío de TETRIX) y el borde es la
+ * misma rejilla cian `--line` que dibuja TETRIX. El color sale del tema; lo
+ * único propio de aquí es cuánta luz deja pasar cada estado.
+ */
+const HIDDEN_ALPHA = 0.45;
+const MINE_ALPHA = 0.35;
 
 export type BuscaminasRun = { score: number; lives: number; level: number };
 
@@ -231,8 +254,9 @@ export function BuscaminasGame({
     if (!ctx) return;
     const colors = paletteRef.current;
 
-    ctx.fillStyle = CELL_BORDER;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    // Transparente, no negro: igual que TETRIX, el lienzo deja ver el
+    // resplandor de `.minas-stage` que hay detrás.
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
@@ -243,10 +267,18 @@ export function BuscaminasGame({
         const cy = y + CELL / 2;
 
         if (cell.revealed) {
-          ctx.fillStyle = cell.mine ? REVEALED_MINE_FILL : REVEALED_FILL;
-          ctx.fillRect(x, y, CELL, CELL);
-          ctx.strokeStyle = CELL_BORDER;
-          ctx.strokeRect(x, y, CELL, CELL);
+          // Terreno despejado: no se pinta nada encima, sólo la rejilla, igual
+          // que una celda vacía del tablero de TETRIX. La mina sí se marca, en
+          // el rojo del tema y translúcida para no apagar el resplandor.
+          if (cell.mine) {
+            ctx.globalAlpha = MINE_ALPHA;
+            ctx.fillStyle = colors.mine;
+            ctx.fillRect(x, y, CELL, CELL);
+            ctx.globalAlpha = 1;
+          }
+          ctx.strokeStyle = colors.grid;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
 
           if (cell.mine) {
             drawMine(ctx, cx, cy, colors);
@@ -258,10 +290,14 @@ export function BuscaminasGame({
             ctx.fillText(String(cell.adjacent), cx, cy + 1);
           }
         } else {
-          ctx.fillStyle = HIDDEN_FILL;
+          // Terreno por descubrir: un velo del fondo del tema, no un gris.
+          ctx.globalAlpha = HIDDEN_ALPHA;
+          ctx.fillStyle = colors.hidden;
           ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
-          ctx.strokeStyle = CELL_BORDER;
-          ctx.strokeRect(x, y, CELL, CELL);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = colors.grid;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
           if (cell.flagged) drawFlag(ctx, cx, cy, colors);
         }
       }
@@ -340,12 +376,18 @@ export function BuscaminasGame({
     const flag = root.getPropertyValue("--magenta").trim();
     const ink = root.getPropertyValue("--ink").trim();
     const inkFaint = root.getPropertyValue("--ink-faint").trim();
+    const grid = root.getPropertyValue("--line").trim();
+    const hidden = root.getPropertyValue("--ink-faint").trim();
+    const mine = root.getPropertyValue("--red").trim();
     paletteRef.current = {
       adjacency,
       cursor: cursor || PALETTE_FALLBACK.cursor,
       flag: flag || PALETTE_FALLBACK.flag,
       ink: ink || PALETTE_FALLBACK.ink,
       inkFaint: inkFaint || PALETTE_FALLBACK.inkFaint,
+      grid: grid || PALETTE_FALLBACK.grid,
+      hidden: hidden || PALETTE_FALLBACK.hidden,
+      mine: mine || PALETTE_FALLBACK.mine,
     };
     draw();
     publish();

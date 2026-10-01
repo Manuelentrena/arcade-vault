@@ -16,6 +16,7 @@ import { ArkanoidGame } from "@/components/arkanoid-game";
 import { AsteroidsGame } from "@/components/asteroids-game";
 import { BuscaminasGame } from "@/components/buscaminas-game";
 import { GamePad } from "@/components/game-pad";
+import { SerpienteGame } from "@/components/serpiente-game";
 import { TetrisGame } from "@/components/tetris-game";
 import type { Game } from "@/lib/supabase/games";
 import { displayName } from "@/lib/supabase/user";
@@ -135,6 +136,29 @@ const ENGINES: Record<
         right: "Mover el cursor a la derecha",
       },
       buttons: ["Revelar la celda", "Marcar con bandera"],
+    },
+  },
+  // SERPIENTE (SPEC 25). `screen` vacío como ARKANOID: su tablero ya es el
+  // 4 / 3 del tubo y, desde la SPEC 21, no queda ninguna regla
+  // `.crt-screen.<modificador>` que un valor nuevo pudiera enganchar.
+  //
+  // Los dos círculos giran 90° **relativo** al rumbo en vez de quedar inertes:
+  // mismo argumento con el que la SPEC 23 revivió la B de TETRIX, y SERPIENTE
+  // habría sido el primer juego con los dos muertos. Que «Girar a la derecha»
+  // aparezca en el dpad y en los botones es correcto: son aria-labels, dicen
+  // el efecto, y una flecha y un círculo pueden llevar al mismo sitio por
+  // caminos distintos — absoluto el de la cruceta, relativo el del círculo.
+  serpiente: {
+    Component: SerpienteGame,
+    screen: "",
+    pad: {
+      dpad: {
+        up: "Girar hacia arriba",
+        down: "Girar hacia abajo",
+        left: "Girar a la izquierda",
+        right: "Girar a la derecha",
+      },
+      buttons: ["Girar a la derecha", "Girar a la izquierda"],
     },
   },
 };
