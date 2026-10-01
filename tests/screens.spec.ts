@@ -281,10 +281,13 @@ test.describe("home", () => {
     await page.goto("/");
     await hydrated(page);
     const first = page.locator(".mini-card").first();
-    await expect(first).toHaveAttribute("href", "/juego/tetrix");
+    // getGames() ordena por created_at y desempata por slug (spec-21-debt):
+    // arkanoid, asteroides, buscaminas, tetrix — alfabético entre los tres
+    // que comparten fecha de migración.
+    await expect(first).toHaveAttribute("href", "/juego/arkanoid");
     await settled(page.locator(".home-section", { has: first }));
     await first.click();
-    await expect(page).toHaveURL("/juego/tetrix", {
+    await expect(page).toHaveURL("/juego/arkanoid", {
       timeout: NAV_TIMEOUT,
     });
   });
