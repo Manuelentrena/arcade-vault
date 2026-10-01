@@ -3276,6 +3276,31 @@
   background: linear-gradient(90deg, var(--line), transparent);
 }
 
+/* ===== blog ===== */
+.blog-post h1 {
+  font-family: var(--pixel);
+  font-size: clamp(16px, 2.4vw, 24px);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  margin: 28px 0 16px;
+}
+.blog-post h2 {
+  font-family: var(--pixel);
+  font-size: clamp(13px, 1.8vw, 16px);
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+  margin: 32px 0 14px;
+}
+.blog-post p {
+  color: var(--ink-dim);
+  line-height: 1.7;
+  margin: 0 0 16px;
+  max-width: 760px;
+}
+.blog-post strong {
+  color: var(--ink);
+}
+
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
