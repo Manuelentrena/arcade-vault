@@ -340,8 +340,11 @@ test.describe("home", () => {
     await expect(page.locator(".feature-card")).toHaveCount(4);
     await expect(page.locator(".mini-card")).toHaveCount(5);
     await expect(page.locator(".stat-block")).toHaveCount(3);
+    // Esqueleto de "ACTIVIDAD EN VIVO": la sección está fuera del viewport
+    // inicial, así que lo que se ve aquí son las filas de carga, no datos
+    // reales — mismo recuento que getRecentScores()/getTopPlayers() por defecto.
     await expect(page.locator(".tick-row")).toHaveCount(7);
-    await expect(page.locator(".top-row")).toHaveCount(5);
+    await expect(page.locator(".top-row")).toHaveCount(6);
     await expect(page.locator(".faq-item")).toHaveCount(3);
     await expect(page.locator(".home-final")).toBeVisible();
   });
@@ -406,6 +409,78 @@ test.describe("home sin animación de entrada", () => {
       await ready(page);
       expect(await hiddenReveals(page)).toBe(0);
     });
+  });
+});
+
+test.describe("actividad en vivo", () => {
+  function activitySection(page: Page): Locator {
+    return page.locator(".home-section", { hasText: "ACTIVIDAD EN VIVO" });
+  }
+
+  test("no pide datos antes de hacer scroll hasta la sección", async ({
+    page,
+  }) => {
+    let pidio = false;
+    page.on("request", (req) => {
+      if (req.url().includes("/api/home-activity")) pidio = true;
+    });
+    await page.goto("/");
+    await hydrated(page);
+    expect(pidio).toBe(false);
+  });
+
+  // Riesgo conocido (SPEC 27): si otra prueba en paralelo guarda una
+  // puntuación real mientras esta corre, puede dejar de ver el vacío.
+  test("sin puntuaciones guardadas muestra el estado vacío en ambas tarjetas", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await hydrated(page);
+    await activitySection(page).scrollIntoViewIfNeeded();
+    await expect(page.locator(".ticker .lb-empty")).toHaveText(
+      "AÚN NADIE HA JUGADO",
+      { timeout: NAV_TIMEOUT },
+    );
+    await expect(page.locator(".top-list .lb-empty")).toHaveText(
+      "AÚN NADIE HA JUGADO",
+    );
+  });
+
+  test("una partida récord real aparece en ambas tarjetas", async ({
+    page,
+  }) => {
+    const puntuacion = 10_000 + Math.floor(Math.random() * 900_000);
+    const formateada = puntuacion.toLocaleString("es-ES");
+
+    // BUSCAMINAS: ni TETRIX (capturas de referencia) ni ASTEROIDES (ya usado
+    // por la prueba de autoguardado de "fin de partida como invitado").
+    await signIn(page);
+    await page.goto(`/jugar/buscaminas?puntuacion=${puntuacion}&nivel=1`);
+    await expect(page.locator(".toast-saved")).toContainText(
+      "¡NUEVA MARCA PERSONAL!",
+    );
+
+    await page.goto("/");
+    await hydrated(page);
+    await activitySection(page).scrollIntoViewIfNeeded();
+    await expect(
+      page.locator(".tick-row", { hasText: formateada }),
+    ).toBeVisible({ timeout: NAV_TIMEOUT });
+    await expect(page.locator(".top-row", { hasText: "PX_KAI" })).toBeVisible();
+  });
+});
+
+test.describe("invitado desde el rebote de /jugar/[id]", () => {
+  test("al entrar como invitado, aterriza en el juego pedido", async ({
+    page,
+  }) => {
+    await page.goto("/jugar/tetrix");
+    await expect(page).toHaveURL(/\/auth\?next=%2Fjugar%2Ftetrix/, {
+      timeout: NAV_TIMEOUT,
+    });
+    await authReady(page);
+    await page.getByRole("button", { name: "JUGAR COMO INVITADO" }).click();
+    await expect(page).toHaveURL("/jugar/tetrix", { timeout: NAV_TIMEOUT });
   });
 });
 
