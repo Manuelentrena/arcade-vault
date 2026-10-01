@@ -460,33 +460,34 @@ npx skills@latest add Klerith/fernando-skills
 
 ### Specs
 
-| Spec                                                                                                               | Estado       | Depende de                                              |
-| ------------------------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------- |
-| [01 — MVP visual de las pantallas](specs/01-mvp-pantallas-visuales.md)                                             | Implementado | —                                                       |
-| [02 — Barra móvil: sesión en la hamburguesa](specs/02-nav-movil-sesion-en-hamburguesa.md)                          | Implementado | SPEC 01                                                 |
-| [03 — Documentación del repo](specs/03-documentacion-readme-y-claude.md)                                           | Implementado | SPEC 01, SPEC 02                                        |
-| [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md)                    | Implementado | SPEC 01, SPEC 02, SPEC 03                               |
-| [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md)                                     | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04                      |
-| [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md)                                             | Implementado | SPEC 01–05                                              |
-| [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md)                                        | Implementado | SPEC 06                                                 |
-| [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)                                 | Implementado | SPEC 07                                                 |
-| [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)                                  | Implementado | SPEC 07                                                 |
-| [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)                     | Implementado | SPEC 09                                                 |
-| [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                                     | Implementado | SPEC 09                                                 |
-| [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)                                 | Implementado | SPEC 11                                                 |
-| [13 — TETRIX: primer juego con motor real](specs/13-tetrix-motor-jugable.md)                                       | Implementado | SPEC 01, SPEC 04                                        |
-| [14 — ASTEROIDES: segundo juego con motor real](specs/14-asteroides-motor-jugable.md)                              | Implementado | SPEC 01, SPEC 04, SPEC 13                               |
-| [15 — ARKANOID: tercer juego con motor real](specs/15-arkanoid-motor-jugable.md)                                   | Implementado | SPEC 01, SPEC 04, SPEC 13                               |
-| [16 — Tablas Supabase para juegos y puntuaciones](specs/16-tablas-supabase-juegos-y-puntuaciones.md)               | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15                      |
-| [17 — Catálogo real desde Supabase y limpieza de decorativos](specs/17-catalogo-real-y-limpieza-de-decorativos.md) | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15, SPEC 16             |
-| [18 — Guardado real de puntuaciones en `scores`](specs/18-guardado-real-de-puntuaciones.md)                        | Implementado | SPEC 07, SPEC 16, SPEC 17                               |
-| [19 — Pantalla completa en el reproductor, solo en móvil](specs/19-pantalla-completa-movil.md)                     | Implementado | SPEC 12, SPEC 13, SPEC 14, SPEC 15, SPEC 18             |
-| [20 — BUSCAMINAS: cuarto motor jugable](specs/20-buscaminas-motor-jugable.md)                                      | Implementado | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19                 |
-| [21 — Mando de consola en móvil: los controles salen del CRT](specs/21-interfaz-mando-movil.md)                    | Implementado | SPEC 12, 13, 14, 15, 19, 20                             |
-| [22 — El MENÚ dentro del tubo: el fin de partida sale del modal](specs/22-menu-en-el-tubo.md)                      | Aprobado     | SPEC 18, SPEC 19, SPEC 21                               |
-| [24 — ARKANOID: premios que caen, segunda bola y pala que crece](specs/24-arkanoid-premios-y-multiball.md)         | Implementado | SPEC 15, SPEC 18, SPEC 21, SPEC 22                      |
-| [25 — SERPIENTE: quinto motor jugable](specs/25-serpiente.md)                                                      | Aprobado     | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 |
-| [26 — Versión 1.0.0 y blog de cambios](specs/26-v1-0-0-y-blog-de-cambios.md)                                       | Implementado | SPEC 01, SPEC 02                                        |
+| Spec                                                                                                                                        | Estado       | Depende de                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------- |
+| [01 — MVP visual de las pantallas](specs/01-mvp-pantallas-visuales.md)                                                                      | Implementado | —                                                       |
+| [02 — Barra móvil: sesión en la hamburguesa](specs/02-nav-movil-sesion-en-hamburguesa.md)                                                   | Implementado | SPEC 01                                                 |
+| [03 — Documentación del repo](specs/03-documentacion-readme-y-claude.md)                                                                    | Implementado | SPEC 01, SPEC 02                                        |
+| [04 — Portada en `/` y biblioteca en `/biblioteca`](specs/04-home-landing-y-ruta-biblioteca.md)                                             | Implementado | SPEC 01, SPEC 02, SPEC 03                               |
+| [05 — `/acerca` con contacto por Resend](specs/05-acerca-y-contacto-resend.md)                                                              | Implementado | SPEC 01, SPEC 02, SPEC 03, SPEC 04                      |
+| [06 — Autenticación real con Supabase](specs/06-supabase-auth-real.md)                                                                      | Implementado | SPEC 01–05                                              |
+| [07 — Modo invitado con sesión anónima](specs/07-modo-invitado-supabase.md)                                                                 | Implementado | SPEC 06                                                 |
+| [08 — Purga automática de invitados con pg_cron](specs/08-purga-invitados-cron.md)                                                          | Implementado | SPEC 07                                                 |
+| [09 — Captcha con Cloudflare Turnstile en `/auth`](specs/09-captcha-turnstile.md)                                                           | Implementado | SPEC 07                                                 |
+| [10 — Despliegue en Vercel: producción desde `main`](specs/10-despliegue-vercel-produccion.md)                                              | Implementado | SPEC 09                                                 |
+| [11 — Captcha visible en `/auth`](specs/11-captcha-visible.md)                                                                              | Implementado | SPEC 09                                                 |
+| [12 — Correcciones responsive en móvil](specs/12-correcciones-responsive-movil.md)                                                          | Implementado | SPEC 11                                                 |
+| [13 — TETRIX: primer juego con motor real](specs/13-tetrix-motor-jugable.md)                                                                | Implementado | SPEC 01, SPEC 04                                        |
+| [14 — ASTEROIDES: segundo juego con motor real](specs/14-asteroides-motor-jugable.md)                                                       | Implementado | SPEC 01, SPEC 04, SPEC 13                               |
+| [15 — ARKANOID: tercer juego con motor real](specs/15-arkanoid-motor-jugable.md)                                                            | Implementado | SPEC 01, SPEC 04, SPEC 13                               |
+| [16 — Tablas Supabase para juegos y puntuaciones](specs/16-tablas-supabase-juegos-y-puntuaciones.md)                                        | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15                      |
+| [17 — Catálogo real desde Supabase y limpieza de decorativos](specs/17-catalogo-real-y-limpieza-de-decorativos.md)                          | Implementado | SPEC 06, SPEC 13, SPEC 14, SPEC 15, SPEC 16             |
+| [18 — Guardado real de puntuaciones en `scores`](specs/18-guardado-real-de-puntuaciones.md)                                                 | Implementado | SPEC 07, SPEC 16, SPEC 17                               |
+| [19 — Pantalla completa en el reproductor, solo en móvil](specs/19-pantalla-completa-movil.md)                                              | Implementado | SPEC 12, SPEC 13, SPEC 14, SPEC 15, SPEC 18             |
+| [20 — BUSCAMINAS: cuarto motor jugable](specs/20-buscaminas-motor-jugable.md)                                                               | Implementado | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19                 |
+| [21 — Mando de consola en móvil: los controles salen del CRT](specs/21-interfaz-mando-movil.md)                                             | Implementado | SPEC 12, 13, 14, 15, 19, 20                             |
+| [22 — El MENÚ dentro del tubo: el fin de partida sale del modal](specs/22-menu-en-el-tubo.md)                                               | Aprobado     | SPEC 18, SPEC 19, SPEC 21                               |
+| [24 — ARKANOID: premios que caen, segunda bola y pala que crece](specs/24-arkanoid-premios-y-multiball.md)                                  | Implementado | SPEC 15, SPEC 18, SPEC 21, SPEC 22                      |
+| [25 — SERPIENTE: quinto motor jugable](specs/25-serpiente.md)                                                                               | Aprobado     | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 |
+| [26 — Versión 1.0.0 y blog de cambios](specs/26-v1-0-0-y-blog-de-cambios.md)                                                                | Implementado | SPEC 01, SPEC 02                                        |
+| [27 — Consultas redundantes, redirección de invitado y actividad real del home](specs/27-arreglos-rendimiento-invitado-y-actividad-home.md) | Implementado | SPEC 04, 06, 07, 16, 17, 18, 26                         |
 
 ## Deuda conocida
 

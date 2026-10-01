@@ -13,7 +13,10 @@ function positiveInt(value: string | string[] | undefined): number | null {
 
 export default async function GamePlayerPage(props: PageProps<"/jugar/[id]">) {
   const { id } = await props.params;
-  const game = await getGameBySlug(id);
+  const [game, session] = await Promise.all([
+    getGameBySlug(id),
+    getServerSession(),
+  ]);
   if (!game) notFound();
 
   // Vuelta desde /auth con la partida de un invitado que acaba de entrar.
@@ -27,7 +30,6 @@ export default async function GamePlayerPage(props: PageProps<"/jugar/[id]">) {
 
   // Solo un usuario real (no invitado) tiene una marca que comparar; un
   // invitado nunca llega a guardar, así que su mejor marca no importa aquí.
-  const session = await getServerSession();
   const initialBest =
     session && !session.isGuest ? await getUserBestScore(id, session.id) : null;
 

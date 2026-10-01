@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getBestScores } from "@/lib/supabase/scores";
+import { getBestScoreForGame, getBestScores } from "@/lib/supabase/scores";
 
 export type GameColor = "cyan" | "magenta" | "yellow" | "green";
 export type GameCat = "ARCADE" | "PUZZLE" | "SHOOTER" | "VERSUS";
@@ -53,7 +53,7 @@ function toGame(
     niveles: number | null;
     categorias: { nombre: string } | null;
   },
-  best: Record<string, number>,
+  best: number | null,
 ): Game {
   return {
     id: row.slug,
@@ -64,7 +64,7 @@ function toGame(
     cover: row.cover,
     image: row.image,
     color: row.color as GameColor,
-    best: best[row.id] ?? null,
+    best,
     plays: row.plays,
     dificultad: row.dificultad,
     jugadores: row.jugadores,
@@ -97,7 +97,7 @@ export async function getGames(): Promise<Game[]> {
     getBestScores(),
   ]);
 
-  return (data ?? []).map((row) => toGame(row, best));
+  return (data ?? []).map((row) => toGame(row, best[row.id] ?? null));
 }
 
 export async function getGameBySlug(slug: string): Promise<Game | null> {
@@ -110,6 +110,6 @@ export async function getGameBySlug(slug: string): Promise<Game | null> {
 
   if (!data) return null;
 
-  const best = await getBestScores();
+  const best = await getBestScoreForGame(data.id);
   return toGame(data, best);
 }

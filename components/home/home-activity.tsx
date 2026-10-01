@@ -1,73 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import type { RecentScore, TopPlayer } from "@/lib/supabase/scores";
 
-type Tick = {
-  player: string;
-  game: string;
-  score: number;
-  when: string;
-  color: "cyan" | "magenta" | "yellow" | "green";
-};
-
-/** Actividad decorativa: no sale de `lib/scores.ts` ni se persiste. */
-const TICKER: Tick[] = [
-  {
-    player: "NEONFOX",
-    game: "Tetrix",
-    score: 184220,
-    when: "hace 2 min",
-    color: "magenta",
-  },
-  {
-    player: "PX_KAI",
-    game: "Asteroides",
-    score: 96400,
-    when: "hace 5 min",
-    color: "yellow",
-  },
-  {
-    player: "Z3R0COOL",
-    game: "Arkanoid",
-    score: 54190,
-    when: "hace 8 min",
-    color: "cyan",
-  },
-  {
-    player: "VAULT_07",
-    game: "Tetrix",
-    score: 41200,
-    when: "hace 12 min",
-    color: "magenta",
-  },
-  {
-    player: "GLITCHA",
-    game: "Asteroides",
-    score: 28450,
-    when: "hace 18 min",
-    color: "yellow",
-  },
-  {
-    player: "ARKADYA",
-    game: "Arkanoid",
-    score: 7820,
-    when: "hace 24 min",
-    color: "cyan",
-  },
-  {
-    player: "CYBER_LU",
-    game: "Tetrix",
-    score: 18900,
-    when: "hace 31 min",
-    color: "magenta",
-  },
-];
-
-const TOP = [
-  { rank: 1, player: "NEONFOX", score: 312840 },
-  { rank: 2, player: "PX_KAI", score: 248110 },
-  { rank: 3, player: "M00NRYU", score: 196720 },
-  { rank: 4, player: "VAULT_07", score: 154300 },
-  { rank: 5, player: "GLITCHA", score: 138900 },
-];
+type Status = "idle" | "loading" | "loaded";
 
 /** Clase de podio de la fila: sólo las tres primeras la llevan. */
 function topClass(i: number): string {
@@ -77,9 +14,67 @@ function topClass(i: number): string {
   return "";
 }
 
-export function HomeActivity() {
+function TickerSkeleton() {
   return (
-    <section className="home-section reveal">
+    <>
+      {Array.from({ length: 7 }, (_, i) => (
+        <div key={i} className="tick-row skeleton">
+          <span className="skeleton-bar" style={{ width: "40%" }} />
+          <span className="skeleton-bar" style={{ width: "30%" }} />
+          <span className="skeleton-bar" style={{ width: "20%" }} />
+          <span className="skeleton-bar" style={{ width: "15%" }} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function TopSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="top-row skeleton">
+          <span className="skeleton-bar" style={{ width: "24px" }} />
+          <span className="skeleton-bar" style={{ width: "50%" }} />
+          <span className="skeleton-bar" style={{ width: "30%" }} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+export function HomeActivity() {
+  const [status, setStatus] = useState<Status>("idle");
+  const [recent, setRecent] = useState<RecentScore[]>([]);
+  const [top, setTop] = useState<TopPlayer[]>([]);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        io.disconnect();
+        setStatus("loading");
+        fetch("/api/home-activity")
+          .then((res) => res.json())
+          .then((data: { recent: RecentScore[]; top: TopPlayer[] }) => {
+            setRecent(data.recent);
+            setTop(data.top);
+            setStatus("loaded");
+          });
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <section ref={sectionRef} className="home-section reveal">
       <div className="section-head">
         <div className="kicker pixel neon-yellow">{"// 03"}</div>
         <h2 className="section-title">ACTIVIDAD EN VIVO</h2>
@@ -91,40 +86,62 @@ export function HomeActivity() {
             <div className="ac-title pixel">▸ ÚLTIMAS PUNTUACIONES</div>
           </div>
           <div className="ticker">
-            {TICKER.map((r, i) => (
+            {status !== "loaded" && <TickerSkeleton />}
+            {status === "loaded" && recent.length === 0 && (
               <div
-                key={r.player + r.game}
-                className="tick-row"
-                style={{ animationDelay: i * 60 + "ms" }}
+                className="lb-empty"
+                style={{ color: "var(--ink-faint)", padding: "24px 16px" }}
               >
-                <span className={"tk-p neon-" + r.color}>{r.player}</span>
-                <span className="tk-mid">▸ {r.game}</span>
-                <span className="tk-s">+{r.score.toLocaleString("es-ES")}</span>
-                <span className="tk-t">{r.when}</span>
+                AÚN NADIE HA JUGADO
               </div>
-            ))}
+            )}
+            {status === "loaded" &&
+              recent.map((r, i) => (
+                <div
+                  key={r.player + r.game + r.when}
+                  className="tick-row"
+                  style={{ animationDelay: i * 60 + "ms" }}
+                >
+                  <span className={"tk-p neon-" + r.color}>{r.player}</span>
+                  <span className="tk-mid">▸ {r.game}</span>
+                  <span className="tk-s">
+                    +{r.score.toLocaleString("es-ES")}
+                  </span>
+                  <span className="tk-t">{r.when}</span>
+                </div>
+              ))}
           </div>
         </div>
 
         <div className="activity-card">
           <div className="ac-head">
-            <div className="ac-title pixel neon-magenta">
-              ▸ TOP JUGADORES · HOY
-            </div>
+            <div className="ac-title pixel neon-magenta">▸ TOP JUGADORES</div>
             <Link className="lb-link" href="/salon">
               VER SALÓN →
             </Link>
           </div>
           <div className="top-list">
-            {TOP.map((r, i) => (
-              <div key={r.player} className={"top-row" + topClass(i)}>
-                <span className="tp-rk">
-                  #{String(r.rank).padStart(2, "0")}
-                </span>
-                <span className="tp-p">{r.player}</span>
-                <span className="tp-s">{r.score.toLocaleString("es-ES")}</span>
+            {status !== "loaded" && <TopSkeleton />}
+            {status === "loaded" && top.length === 0 && (
+              <div
+                className="lb-empty"
+                style={{ color: "var(--ink-faint)", padding: "24px 16px" }}
+              >
+                AÚN NADIE HA JUGADO
               </div>
-            ))}
+            )}
+            {status === "loaded" &&
+              top.map((r, i) => (
+                <div key={r.player} className={"top-row" + topClass(i)}>
+                  <span className="tp-rk">
+                    #{String(r.rank).padStart(2, "0")}
+                  </span>
+                  <span className="tp-p">{r.player}</span>
+                  <span className="tp-s">
+                    {r.score.toLocaleString("es-ES")}
+                  </span>
+                </div>
+              ))}
           </div>
         </div>
       </div>
