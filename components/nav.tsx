@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/components/session-provider";
 import { displayName } from "@/lib/supabase/user";
 
-type Section = "inicio" | "biblioteca" | "salon" | "acerca";
+type Section = "inicio" | "biblioteca" | "salon" | "acerca" | "blog";
 
 function sectionOf(pathname: string): Section | null {
   if (pathname === "/") return "inicio";
@@ -19,6 +19,7 @@ function sectionOf(pathname: string): Section | null {
   }
   if (pathname.startsWith("/salon")) return "salon";
   if (pathname.startsWith("/acerca")) return "acerca";
+  if (pathname.startsWith("/blog")) return "blog";
   return null;
 }
 
@@ -45,8 +46,11 @@ export function Nav() {
       <nav className="av-nav">
         <Link className="logo" href="/" onClick={close}>
           <div className="logo-mark" aria-hidden />
-          <div className="logo-text neon-cyan">
-            ARCADE <span className="neon-magenta">VAULT</span>
+          <div className="logo-copy">
+            <div className="logo-text neon-cyan">
+              ARCADE <span className="neon-magenta">VAULT</span>
+            </div>
+            <span className="logo-version">v1.0.0</span>
           </div>
         </Link>
 
@@ -62,6 +66,9 @@ export function Nav() {
           </Link>
           <Link className={cls("acerca")} href="/acerca">
             Acerca de
+          </Link>
+          <Link className={cls("blog")} href="/blog">
+            Cambios
           </Link>
         </div>
 
@@ -136,6 +143,9 @@ export function Nav() {
         </Link>
         <Link className={cls("acerca")} href="/acerca" onClick={close}>
           Acerca de
+        </Link>
+        <Link className={cls("blog")} href="/blog" onClick={close}>
+          Cambios
         </Link>
         <div style={{ flex: 1 }} />
         <div className="panel-session">

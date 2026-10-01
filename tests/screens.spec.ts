@@ -2722,6 +2722,58 @@ test.describe("endpoint de contacto", () => {
   });
 });
 
+test.describe("blog", () => {
+  test("/blog carga y lista la 1.0.0", async ({ page }) => {
+    await page.goto("/blog");
+    await expect(
+      page.getByRole("link", { name: /Arcade Vault abre sus puertas/ }),
+    ).toBeVisible();
+  });
+
+  test("/blog/v1.0.0 renderiza su contenido", async ({ page }) => {
+    await page.goto("/blog/v1.0.0");
+    await expect(
+      page.getByRole("heading", { name: /Arcade Vault abre sus puertas/ }),
+    ).toBeVisible();
+    await expect(page.getByText("2026-10-01")).toBeVisible();
+  });
+
+  test("una versión inexistente da 404", async ({ page }) => {
+    const response = await page.goto("/blog/v9.9.9");
+    expect(response?.status()).toBe(404);
+    await expect(page.getByText("PANTALLA NO ENCONTRADA")).toBeVisible();
+  });
+
+  test("el nav muestra CAMBIOS y navega a /blog", async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto("/");
+
+    if (isMobile) {
+      await page.getByRole("button", { name: "Abrir menú" }).click();
+      await page
+        .locator(".av-mobile-panel")
+        .getByRole("link", { name: "Cambios" })
+        .click();
+      await expect(page).toHaveURL("/blog");
+      await page.getByRole("button", { name: "Abrir menú" }).click();
+      await expect(
+        page.locator(".av-mobile-panel").getByRole("link", { name: "Cambios" }),
+      ).toHaveClass(/active/);
+    } else {
+      await page
+        .locator(".av-nav .links")
+        .getByRole("link", { name: "Cambios" })
+        .click();
+      await expect(page).toHaveURL("/blog");
+      await expect(
+        page.locator(".av-nav .links").getByRole("link", { name: "Cambios" }),
+      ).toHaveClass(/active/);
+    }
+  });
+});
+
 test.describe("responsive", () => {
   test("la hamburguesa abre y cierra el menú", async ({ page, isMobile }) => {
     test.skip(!isMobile, "solo aplica al proyecto mobile");

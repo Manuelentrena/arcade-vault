@@ -13,6 +13,7 @@ Every spec starts with metadata in a blockquote (no tables, no blocks, simple as
 
 > **Status:** Draft
 > **Depends on:** SPEC 01, SPEC 02
+> **Version bump:** Minor
 > **Date:** YYYY-MM-DD
 > **Objective:** A single sentence. If you need two sentences, the feature is too big.
 ```
@@ -22,6 +23,16 @@ Every spec starts with metadata in a blockquote (no tables, no blocks, simple as
 > The labels above are the English defaults. The skills also accept equivalents in any language (e.g. Spanish `Borrador` / `En revisión` / `Aprobado` / `Implementado` / `Obsoleto`). Pick one set per repo and stay consistent.
 
 **Objective rule:** one sentence that a human reads in 5 seconds and understands what is going to be built. If it doesn't fit in one sentence, split the feature.
+
+**Valid version bumps:** `Major`, `Minor`, `Fix` (Spanish: `Mayor` / `Menor` / `Fix`). Every spec declares exactly one, judged against the project's current version (read it from `package.json` or wherever the repo tracks it):
+
+- **Major** — a milestone or a breaking change to how the product behaves.
+- **Minor** — new functionality, additive, nothing existing breaks.
+- **Fix** — a correction with no new functionality.
+
+This field is not decorative: the implementation plan's last step and one acceptance-criteria item must always cover bumping the version (see Sections 4 and 5 below).
+
+**Fix bumps publish no post.** Only `Major` and `Minor` get a changelog entry. A `Fix` still bumps the version number, but silently — no post. When the next `Major`/`Minor` publishes, its post must roll up every `Fix` bumped since the previous published post (scan `specs/` for `Implemented` specs with `Fix` numbered after the spec that produced that previous post, pull each one's Objective into a short "also includes" list in the new post). If no Fixes happened since, omit that list.
 
 ---
 
@@ -99,6 +110,7 @@ Numbered steps. Each step must leave the system in a **functional and runnable**
 - Each step must be commitable on its own.
 - If a step requires more than 30–50 lines of code, split it.
 - The last step of the plan is **not** "test everything" — that is the acceptance criteria.
+- **Standing closing step:** every plan's last step is "bump the version per the header's **Version bump** field; if it is `Major` or `Minor`, also publish a changelog post about this spec (and any unpublished `Fix`es since the last post) at `/blog/vX.Y.Z`; if it is `Fix`, only bump — no post." (or the repo's equivalent route/mechanism). This happens during implementation, not while writing the spec — the step just needs to exist in the plan so `/spec-impl` executes it.
 
 ---
 
@@ -120,6 +132,8 @@ Boolean checklist. Each item can be verified with yes or no.
 - ❌ "Good UX." → subjective.
 - ❌ "No bugs." → not operational.
 - ✅ "Pressing Esc pauses the game and shows the menu." → verifiable, boolean.
+
+**Standing item:** always include one checking that the version was bumped as declared. For `Major`/`Minor`, add one checking the changelog post exists, renders, and rolls up any unpublished `Fix`es since the previous post (e.g. "`/blog/vX.Y.Z` renders a post summarizing this spec's changes"). For `Fix`, add one explicitly confirming no post was created.
 
 ---
 

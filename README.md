@@ -486,6 +486,7 @@ npx skills@latest add Klerith/fernando-skills
 | [22 — El MENÚ dentro del tubo: el fin de partida sale del modal](specs/22-menu-en-el-tubo.md)                      | Aprobado     | SPEC 18, SPEC 19, SPEC 21                               |
 | [24 — ARKANOID: premios que caen, segunda bola y pala que crece](specs/24-arkanoid-premios-y-multiball.md)         | Implementado | SPEC 15, SPEC 18, SPEC 21, SPEC 22                      |
 | [25 — SERPIENTE: quinto motor jugable](specs/25-serpiente.md)                                                      | Aprobado     | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 |
+| [26 — Versión 1.0.0 y blog de cambios](specs/26-v1-0-0-y-blog-de-cambios.md)                                       | Implementado | SPEC 01, SPEC 02                                        |
 
 ## Deuda conocida
 

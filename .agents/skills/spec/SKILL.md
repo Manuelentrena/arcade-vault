@@ -2,7 +2,7 @@
 name: spec
 description: Designs and develops specs following the spec-driven method. Asks clarifying questions before proposing structure, and builds the spec section by section. Use it when starting a large feature, before writing code.
 disable-model-invocation: true
-argument-hint: 'short feature description or requirement'
+argument-hint: "short feature description or requirement"
 allowed-tools: Read, Glob, Grep, Write, AskUserQuestion, Bash(ls:*), Bash(cat:*), Bash(date:*)
 ---
 
@@ -47,6 +47,8 @@ This is the most important phase of the command. Your job here is to **detect am
 
 Ask questions in blocks of 3 to 5 at a time (not one single question followed by another single question — that is exhausting). After each block, wait for an answer before continuing.
 
+**Mandatory question — version bump.** Every spec asks this one, no exceptions: is this spec a **Major**, **Minor**, or **Fix**? Read the project's current version (e.g. `cat package.json | grep version`, or wherever this repo tracks it) and show it as reference. Major = milestone or breaking change, Minor = additive functionality, Fix = correction with no new functionality. Put this in its own block or fold it into the first block of questions — but never skip it and never guess it from the feature description. Tell the user up front: **Fix bumps publish no changelog post** — only Major/Minor do, and the next Major/Minor rolls up every Fix published since.
+
 **Question categories you should always consider:**
 
 - **Scope:** What is in and what is NOT? Which parts of the feature are deferred to another spec?
@@ -84,11 +86,11 @@ Once Phase 2 is closed, decide how to write it:
 
 In both cases the content follows the same order:
 
-1. **Header** (state, dependencies, date, one-sentence objective). The one-sentence objective is critical — if it does not fit in one sentence, go back to Phase 2.
+1. **Header** (state, dependencies, version bump, date, one-sentence objective). The one-sentence objective is critical — if it does not fit in one sentence, go back to Phase 2.
 2. **Scope** (what is in and what is NOT). The "not in" must be explicit.
 3. **Data model** (concrete structures with real names). If the feature introduces no new data, skip this section and say so explicitly.
-4. **Implementation plan** (numbered steps, each leaving the system functional).
-5. **Acceptance criteria** (boolean checklist, not aspirational).
+4. **Implementation plan** (numbered steps, each leaving the system functional). Its last step is always the standing closing step: bump the version per the header's declared type; publish a changelog post rolling up any unpublished Fixes only if the type is Major/Minor, no post at all if it's Fix (see `template.md`).
+5. **Acceptance criteria** (boolean checklist, not aspirational). Always include the standing item verifying the version was bumped; for Major/Minor add one for the post existing/rendering/rolling up pending Fixes, for Fix add one confirming no post was created.
 6. **Decisions taken and discarded** (with brief justification).
 7. **Identified risks** (only if applicable — if no relevant risks exist, skip it).
 
@@ -142,6 +144,8 @@ When the content is ready (either because you had everything, or because all sec
 - **Do not re-ask in Phase 3 what was already answered in Phase 2.** If the information is complete, write the whole spec and save it. Section-by-section confirmation is the fallback for incomplete information, not the default.
 - **If the user wants to speed up and skip Phase 2**, remind them: "Questions now save hours later. Are you sure you want to skip them?". If they insist, respect their decision but record it in the spec's decisions section ("Quick definition without detailed clarification").
 - **If the feature is too big** (does not fit in one sentence, touches more than three areas of the system, requires decisions in four or more domains), propose splitting it into two or more specs before continuing.
+- **Never skip the version-bump question.** Every spec declares Major/Minor/Fix in its header, and its implementation plan and acceptance criteria always carry the standing version-bump steps described in `template.md`. This is what makes the bump declaration meaningful — `/spec-impl` is the one that actually executes it.
+- **Fix bumps never get a changelog post.** Only Major/Minor publish — the next one to publish rolls up every Fix bumped since the previous post. Do not let a spec's plan create a post for a Fix bump.
 
 ## Tone when asking questions
 

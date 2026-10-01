@@ -200,10 +200,22 @@ Once confirmed, follow these rules during the entire implementation:
 - Suggest noting it down for the next spec.
 - Do not implement it on this branch.
 
+**The standing closing step (version bump, + changelog post for Major/Minor only):** if the spec's header declares a **Version bump** (Major/Minor/Fix — see `.agents/skills/spec/template.md`), the plan's last step is always to act on it. When you reach that step:
+
+1. Read the repo's current version (e.g. `package.json`'s `"version"` field, or wherever this repo tracks it).
+2. Compute the new semver from the declared bump: Major → `X+1.0.0`, Minor → `X.Y+1.0`, Fix → `X.Y.Z+1`.
+3. Update every place that version string is duplicated — `package.json`, the footer, and the small version tag under the word "ARCADE" in the header logo (`components/nav.tsx`, `.logo-text`) — they must all agree after this step. Do this for **every** bump, Fix included.
+4. **If the bump is `Fix`: stop here. No post gets created.** The bump is silent — it only shows up later, rolled into the next Major/Minor post.
+5. **If the bump is `Major` or `Minor`:** find the previous published post (the highest-versioned file in the blog content directory). Scan `specs/` for every spec numbered after the one that produced that post, with state `Implemented` and a `Fix` bump, and that has no post of its own (by construction, none do) — pull each one's Objective into a short "also includes these fixes" list. Then create the changelog post for the new version at the route/mechanism the spec's data model and implementation plan describe. Write it **marketing style, like a product launch, never a dev log**: a catchy, punchy headline (not "la versión X.Y.Z llega" — sell the change, don't just announce it), and a body organized into subsections by the area of the app each change touches (e.g. games/engines, scores and leaderboards, account/profile, mobile experience, new features) rather than one flat paragraph — pick whichever areas this spec actually touched, don't force all of them. Append the rolled-up Fix list (if non-empty) as its own short closing section, still in that same voice. Write the summary yourself from the spec's objective and scope — do not leave a placeholder. Omit the rolled-up list entirely if no Fixes happened since the last post.
+6. Verify the new post (if any was created) actually renders at its route before moving on.
+
+Do this before the final commit, as part of finishing the plan — not as a separate, optional step.
+
 **When finishing the last step:**
 
 ```
-✅ All steps of the plan are implemented.
+✅ All steps of the plan are implemented, including the version bump
+   (and its changelog post, if this spec's bump was Major/Minor).
 
 Next step: verify the spec's acceptance criteria one by one.
 If they all pass, update the spec's state to "Implemented" (or the equivalent
