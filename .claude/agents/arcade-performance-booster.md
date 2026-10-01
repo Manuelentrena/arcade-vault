@@ -1,0 +1,1 @@
+../../.agents/agents/arcade-performance-booster.md

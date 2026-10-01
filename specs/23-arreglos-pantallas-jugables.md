@@ -1,6 +1,6 @@
 # SPEC 23 — Tres arreglos del reproductor: selección, botón B y contador de banderas
 
-**Estado:** Aprovado
+**Estado:** Implementado
 **Depende de:** SPEC 20 (BUSCAMINAS y su leyenda), SPEC 21 (el mando de móvil y las bandas del tubo), SPEC 22 (el panel dentro del tubo y el `user-select` de `.btn` y `.game-pad`)
 **Fecha:** 2026-09-30
 **Objetivo:** Cerrar tres defectos del reproductor —el texto que se selecciona con el dedo, el botón B inerte de TETRIX y el contador de banderas de BUSCAMINAS que no se mueve— sin tocar las reglas de ningún motor.

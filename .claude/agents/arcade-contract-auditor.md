@@ -1,0 +1,1 @@
+../../.agents/agents/arcade-contract-auditor.md
