@@ -9,6 +9,15 @@ import {
   step,
   type ArkanoidState,
 } from "../lib/arkanoid";
+import {
+  DIRS,
+  createState as crearSerpiente,
+  enqueueDir,
+  enqueueTurn,
+  start as arrancarSerpiente,
+  step as pasoSerpiente,
+  tickMs,
+} from "../lib/serpiente";
 
 const ROUTES = [
   { name: "home", path: "/" },
@@ -138,6 +147,50 @@ async function loseArkanoid(page: Page) {
       { timeout: 45_000, intervals: [500] },
     )
     .toBe(true);
+}
+
+/**
+ * Localiza la cabeza de SERPIENTE leyendo los píxeles del lienzo.
+ *
+ * Hace falta porque SERPIENTE es el único de los cinco motores que avanza sin
+ * que nadie pulse nada: «la huella del canvas cambió» no prueba que una tecla
+ * haya llegado al motor, porque cambia igual. El **rumbo** sí lo prueba, y la
+ * cabeza se puede aislar por color sin tocar el estado del motor.
+ *
+ * `components/serpiente-game.tsx` pinta la cabeza con el verde del tema más un
+ * velo blanco al 45 %, así que es el único elemento con el rojo y el verde
+ * altos a la vez: el cuerpo lleva el verde sin velo (R ≈ 0) y la fruta es roja
+ * (G ≈ 47). De ahí el umbral.
+ */
+async function cabezaSerpiente(page: Page): Promise<{
+  fila: number;
+  col: number;
+}> {
+  return page.locator("canvas.snake-board").evaluate((el) => {
+    const canvas = el as HTMLCanvasElement;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("sin contexto 2d");
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 60 && data[i + 1] > 150) {
+        const p = i / 4;
+        sx += p % canvas.width;
+        sy += Math.floor(p / canvas.width);
+        n++;
+      }
+    }
+    if (n === 0) throw new Error("cabeza no encontrada en el lienzo");
+
+    // 20 × 15 celdas, con el lienzo escalado por devicePixelRatio.
+    return {
+      col: Math.floor(sx / n / (canvas.width / 20)),
+      fila: Math.floor(sy / n / (canvas.height / 15)),
+    };
+  });
 }
 
 /** Credenciales del usuario que siembra supabase/seed.sql. */
@@ -284,7 +337,7 @@ test.describe("home", () => {
     await page.goto("/");
     await expect(page.locator("h1.home-title")).toContainText("EL ARCADE");
     await expect(page.locator(".feature-card")).toHaveCount(4);
-    await expect(page.locator(".mini-card")).toHaveCount(4);
+    await expect(page.locator(".mini-card")).toHaveCount(5);
     await expect(page.locator(".stat-block")).toHaveCount(3);
     await expect(page.locator(".tick-row")).toHaveCount(7);
     await expect(page.locator(".top-row")).toHaveCount(5);
@@ -356,10 +409,10 @@ test.describe("home sin animación de entrada", () => {
 });
 
 test.describe("biblioteca", () => {
-  test("muestra los 4 juegos", async ({ page }) => {
+  test("muestra los 5 juegos", async ({ page }) => {
     await page.goto("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(4);
-    await expect(page.locator(".cover-bg")).toHaveCount(4);
+    await expect(page.locator(".card")).toHaveCount(5);
+    await expect(page.locator(".cover-bg")).toHaveCount(5);
   });
 
   test("el buscador filtra por nombre", async ({ page }) => {
@@ -393,6 +446,25 @@ test.describe("biblioteca", () => {
     await expect(cover).toHaveAttribute("src", /asteroides\.png/);
   });
 
+  test("el chip ARCADE muestra ARKANOID y SERPIENTE", async ({ page }) => {
+    await page.goto("/biblioteca");
+    await page.getByRole("button", { name: "ARCADE" }).click();
+    await expect(page.locator(".card")).toHaveCount(2);
+    // Orden de getGames(): created_at y, en empate, slug. SERPIENTE llega en
+    // una migración posterior, así que va detrás de ARKANOID.
+    await expect(page.locator(".card .title")).toHaveText([
+      "ARKANOID",
+      "SERPIENTE",
+    ]);
+
+    // Su portada es la captura real, no el dibujo CSS de respaldo.
+    const cover = page
+      .locator(".card", { hasText: "SERPIENTE" })
+      .locator(".cover-bg");
+    await expect(cover).toHaveClass(/cover-shot/);
+    await expect(cover).toHaveAttribute("src", /serpiente\.png/);
+  });
+
   test("el chip PUZZLE muestra TETRIX y BUSCAMINAS", async ({ page }) => {
     await page.goto("/biblioteca");
     await page.getByRole("button", { name: "PUZZLE" }).click();
@@ -411,7 +483,7 @@ test.describe("biblioteca", () => {
     await expect(page).toHaveURL("/juego/asteroides");
     await page.goBack();
     await expect(page).toHaveURL("/biblioteca");
-    await expect(page.locator(".card")).toHaveCount(4);
+    await expect(page.locator(".card")).toHaveCount(5);
   });
 });
 
@@ -1073,11 +1145,22 @@ test.describe("arkanoid", () => {
       .locator(".hud-actions .btn:visible")
       .allInnerTexts();
 
+    await page.goto("/jugar/serpiente");
+    await expect(page.locator(".snake-board")).toBeVisible();
+    const serpiente = await page
+      .locator(".player-hud .hud-stat .l")
+      .allInnerTexts();
+    const botonesSerpiente = await page
+      .locator(".hud-actions .btn:visible")
+      .allInnerTexts();
+
     expect(arkanoid).toEqual(tetrix);
     expect(arkanoid).toEqual(buscaminas);
+    expect(arkanoid).toEqual(serpiente);
     expect(arkanoid).toHaveLength(4);
     expect(botonesArkanoid).toEqual(botonesTetrix);
     expect(botonesArkanoid).toEqual(botonesBuscaminas);
+    expect(botonesArkanoid).toEqual(botonesSerpiente);
     // La fila cambia de contenido con el viewport, no con el juego: en móvil
     // PAUSA y MENÚ bajan al mando (SPEC 21). SALIR salió del HUD y vive en el
     // panel, y ⛶ está ahora en los dos viewports (SPEC 22).
@@ -1431,20 +1514,330 @@ test.describe("buscaminas", () => {
 });
 
 /**
- * SPEC 21 — el mando de consola de móvil. A ≤ 720px los cuatro motores sacan
+ * SPEC 25 — SERPIENTE, quinto motor. Reloj **vivo**: es el motor que más lo
+ * necesita de los cinco, porque es el único cuyo estado avanza sin que nadie
+ * pulse nada. Sin captura del tablero: la fruta es aleatoria.
+ *
+ * Por eso casi nada se mide con la huella del lienzo —cambia sola— y casi todo
+ * con `cabezaSerpiente()`, que lee el rumbo real del píxel.
+ */
+test.describe("serpiente", () => {
+  test("arranca con un corazón, nivel 01 y la cruceta dentro del tubo", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "la cruceta del tubo sólo se ve por encima de 720px");
+    await signIn(page);
+    await page.goto("/jugar/serpiente");
+
+    await expect(page.locator(".snake-board")).toBeVisible();
+    const hud = page.locator(".player-hud");
+    await expect(hud.locator(".hud-stat.score .v")).toHaveText("0");
+    await expect(hud.locator(".hud-stat.lives .v")).toHaveText("♥");
+    await expect(hud.locator(".hud-stat.level .v")).toHaveText("01");
+
+    await expect(page.locator(".crt-screen .snake-pad .btn")).toHaveCount(4);
+    // Ni aquí ni en ningún otro motor hay un control de pausa dentro del tubo.
+    await expect(
+      page.locator(".crt-screen").getByRole("button", { name: /PAUSA/ }),
+    ).toHaveCount(0);
+  });
+
+  test("espera quieta al primer giro y entonces ya no se detiene", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/jugar/serpiente");
+    await expect(page.locator(".snake-board")).toBeVisible();
+
+    // `started` es el serving de SERPIENTE: con la serpiente arrancando en el
+    // centro quedan nueve celdas de pista, así que sin esta espera cargar la
+    // página consumía una partida en 1,35 s sin tocar nada — y dejaba este
+    // bloque entero sin poder llegar a tiempo a ninguna aserción.
+    const inicio = await cabezaSerpiente(page);
+    await page.waitForTimeout(1_200);
+    expect(await cabezaSerpiente(page)).toEqual(inicio);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // Y desde el primer giro avanza sola, sin volver a pulsar nada.
+    await page.keyboard.press("ArrowUp");
+    await expect
+      .poll(async () => (await cabezaSerpiente(page)).fila, { timeout: 5_000 })
+      .toBeLessThan(inicio.fila);
+  });
+
+  test("girar cambia el rumbo y no desplaza la página", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/jugar/serpiente");
+    await expect(page.locator(".snake-board")).toBeVisible();
+
+    const { fila } = await cabezaSerpiente(page);
+    await page.keyboard.press("ArrowUp");
+    await expect
+      .poll(async () => (await cabezaSerpiente(page)).fila, { timeout: 5_000 })
+      .toBeLessThan(fila);
+
+    // Las cuatro flechas llevan preventDefault() o jugar desplazaría la página.
+    for (const tecla of ["ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp"]) {
+      await page.keyboard.press(tecla);
+    }
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
+
+  test("dos giros en el mismo paso no la matan", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/jugar/serpiente");
+    await expect(page.locator(".snake-board")).toBeVisible();
+
+    // El test de la cola de giros, la regla que la spec llama no negociable.
+    // ▲ y ◀ seguidos, sin espera, caen dentro del mismo paso de 150 ms: con
+    // una sola ranura el segundo se validaría contra un rumbo que todavía no
+    // ha avanzado (→), lo aceptaría como válido, y la serpiente se comería el
+    // cuello. Con cola, el segundo se valida contra ▲ y es legal.
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForTimeout(900);
+
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator(".player-hud .hud-stat.lives .v")).toHaveText(
+      "♥",
+    );
+    // Los dos giros se aplicaron, en orden: arriba primero y luego izquierda.
+    const { fila, col } = await cabezaSerpiente(page);
+    expect(fila).toBeLessThan(7);
+    expect(col).toBeLessThan(10);
+  });
+
+  test("PAUSA congela el lienzo de verdad", async ({ page, isMobile }) => {
+    test.skip(isMobile, "en móvil PAUSA vive en el mando, no en el HUD");
+    await signIn(page);
+    await page.goto("/jugar/serpiente");
+    await expect(page.locator(".snake-board")).toBeVisible();
+
+    // Hay que arrancarla primero: quieta, el lienzo tampoco cambiaría sin
+    // pausa, y el test no probaría nada.
+    await page.keyboard.press("ArrowUp");
+    await page.waitForTimeout(300);
+
+    await page.getByRole("button", { name: "PAUSA" }).click();
+    await expect(page.getByText("EN PAUSA")).toBeVisible();
+
+    // Aquí la aserción es más fuerte que en los otros cuatro: sin pausa el
+    // lienzo cambiaría solo, así que exigirlo **idéntico** un segundo prueba
+    // que el bucle está cancelado, no sólo que el cartel se pintó.
+    const huella = () =>
+      page
+        .locator("canvas.snake-board")
+        .screenshot()
+        .then((b) => b.toString("base64"));
+    const antes = await huella();
+    await page.waitForTimeout(1_000);
+    expect(await huella()).toBe(antes);
+
+    await page.getByRole("button", { name: "REANUDAR" }).click();
+    await expect(page.getByText("EN PAUSA")).toHaveCount(0);
+    await expect.poll(huella, { timeout: 5_000 }).not.toBe(antes);
+  });
+});
+
+/**
+ * SPEC 25 — las **reglas** de SERPIENTE, sobre el módulo puro y sin navegador,
+ * siguiendo el precedente de `arkanoid — motor de premios y multibola`.
+ *
+ * Viven aquí y no en el bloque de arriba a propósito. La serpiente avanza sola
+ * a 150 ms el paso, así que comprobar desde Playwright que la marcha atrás se
+ * descarta, o que comer suma `10 × nivel`, es una carrera contra el reloj del
+ * motor: o se conduce a ciegas contra una fruta aleatoria, o se mide después de
+ * que la partida haya terminado. Sobre el módulo puro las dos cosas son
+ * exactas. El navegador se queda con lo que sólo él puede probar: el cableado,
+ * el HUD, la pausa y el mando.
+ */
+test.describe("serpiente — motor (módulo puro)", () => {
+  test("el paso se acorta por nivel y se clava en el suelo", () => {
+    expect(tickMs(1)).toBe(150);
+    expect(tickMs(2)).toBe(138);
+    // 150 − 7 × 12 = 66: el nivel 8 todavía no toca suelo.
+    expect(tickMs(8)).toBe(66);
+    expect(tickMs(9)).toBe(60);
+    expect(tickMs(999)).toBe(60);
+  });
+
+  test("nace quieta y arranca con cualquier dirección", () => {
+    const s = crearSerpiente(1);
+    expect(s.started).toBe(false);
+    expect(s.snake).toHaveLength(4);
+
+    const quieta = JSON.stringify(s.snake);
+    for (let i = 0; i < 50; i++) pasoSerpiente(s);
+    expect(JSON.stringify(s.snake)).toBe(quieta);
+    expect(s.over).toBe(false);
+
+    // Incluso el rumbo que ya lleva arranca, aunque la cola lo descarte como
+    // giro: arrancar y girar son dos cosas distintas.
+    enqueueDir(s, DIRS.right);
+    expect(s.started).toBe(true);
+    expect(s.dirQueue).toHaveLength(0);
+    pasoSerpiente(s);
+    expect(s.snake[0]).toEqual({ x: 11, y: 7 });
+  });
+
+  test("la marcha atrás se descarta, y la cola nunca pasa de dos", () => {
+    const s = crearSerpiente(1);
+
+    enqueueDir(s, DIRS.left); // reversa del rumbo inicial
+    expect(s.dirQueue).toHaveLength(0);
+    enqueueDir(s, DIRS.right); // el mismo rumbo: tampoco es un giro
+    expect(s.dirQueue).toHaveLength(0);
+
+    enqueueDir(s, DIRS.up);
+    enqueueDir(s, DIRS.left);
+    enqueueDir(s, DIRS.down); // la cola está llena
+    expect(s.dirQueue).toHaveLength(2);
+  });
+
+  /**
+   * La regla no negociable. Con una sola ranura, el segundo giro se validaría
+   * contra un `dir` que todavía no ha avanzado (→), lo aceptaría, y la
+   * serpiente se comería el cuello. Validado contra el último de la cola (▲),
+   * ◀ es legal.
+   */
+  test("dos giros dentro del mismo paso se encolan y no la matan", () => {
+    const s = crearSerpiente(1);
+    enqueueDir(s, DIRS.up);
+    enqueueDir(s, DIRS.left);
+    expect(s.dirQueue).toHaveLength(2);
+
+    pasoSerpiente(s);
+    expect(s.snake[0]).toEqual({ x: 10, y: 6 });
+    pasoSerpiente(s);
+    expect(s.snake[0]).toEqual({ x: 9, y: 6 });
+    expect(s.over).toBe(false);
+    expect(s.dirQueue).toHaveLength(0);
+  });
+
+  /**
+   * Seguirse la cola a distancia cero es la maniobra buena: el último segmento
+   * abandona su celda en el mismo paso, así que matar al jugador por hacerla
+   * sería el defecto.
+   */
+  test("la cola que se libera no cuenta como choque", () => {
+    const s = crearSerpiente(1);
+    s.snake = [
+      { x: 5, y: 5 },
+      { x: 5, y: 6 },
+      { x: 6, y: 6 },
+      { x: 6, y: 5 },
+    ];
+    s.dir = DIRS.right;
+    s.fruit = { x: 19, y: 14 };
+    arrancarSerpiente(s);
+
+    // La cabeza entra justo en (6,5), que es la celda que la cola deja libre.
+    pasoSerpiente(s);
+    expect(s.over).toBe(false);
+    expect(s.snake[0]).toEqual({ x: 6, y: 5 });
+  });
+
+  test("el muro mata y no hay bordes que envuelvan", () => {
+    const s = crearSerpiente(1);
+    arrancarSerpiente(s);
+    for (let i = 0; i < 40 && !s.over; i++) pasoSerpiente(s);
+
+    expect(s.over).toBe(true);
+    expect(s.lives).toBe(0);
+    // Murió contra el muro de la derecha, no reapareció por la izquierda.
+    expect(s.snake[0].x).toBe(19);
+  });
+
+  test("comer alarga uno, suma 10 × nivel y sube de nivel cada cinco frutas", () => {
+    const s = crearSerpiente(1);
+    const comer = () => {
+      s.snake = [
+        { x: 5, y: 5 },
+        { x: 4, y: 5 },
+        { x: 3, y: 5 },
+      ];
+      s.dir = DIRS.right;
+      s.dirQueue = [];
+      s.fruit = { x: 6, y: 5 };
+      arrancarSerpiente(s);
+      pasoSerpiente(s);
+    };
+
+    comer();
+    expect(s.snake).toHaveLength(4); // tres segmentos + el que crece
+    expect(s.score).toBe(10);
+    expect(s.level).toBe(1);
+
+    for (let i = 0; i < 4; i++) comer();
+    expect(s.fruits).toBe(5);
+    expect(s.level).toBe(2);
+    expect(s.score).toBe(50);
+
+    // La sexta ya vale el doble: el nivel multiplica.
+    comer();
+    expect(s.score).toBe(70);
+  });
+
+  test("los círculos del mando giran 90° relativo al rumbo", () => {
+    // A (derecha) desde →  es ▼;  B (izquierda) desde → es ▲.
+    let s = crearSerpiente(1);
+    enqueueTurn(s, 1);
+    expect(s.dirQueue[0]).toEqual(DIRS.down);
+
+    s = crearSerpiente(1);
+    enqueueTurn(s, -1);
+    expect(s.dirQueue[0]).toEqual(DIRS.up);
+
+    // Cuatro giros a la derecha devuelven el rumbo de partida.
+    s = crearSerpiente(1);
+    const inicial = s.dir;
+    for (let i = 0; i < 4; i++) {
+      s.dirQueue = [];
+      enqueueTurn(s, 1);
+      s.dir = s.dirQueue[0];
+    }
+    expect(s.dir).toEqual(inicial);
+  });
+
+  test("no hay estado de victoria, y la partida terminada no acepta nada", () => {
+    const s = crearSerpiente(1);
+    expect("win" in s).toBe(false);
+
+    s.over = true;
+    const antes = JSON.stringify(s.snake);
+    arrancarSerpiente(s);
+    enqueueDir(s, DIRS.up);
+    enqueueTurn(s, 1);
+    pasoSerpiente(s);
+
+    expect(s.started).toBe(false);
+    expect(s.dirQueue).toHaveLength(0);
+    expect(JSON.stringify(s.snake)).toBe(antes);
+  });
+});
+
+/**
+ * SPEC 21 — el mando de consola de móvil. A ≤ 720px los cinco motores sacan
  * sus mandos del tubo y los sustituye un mando único, soldado bajo el CRT.
  * Los mandos internos no se desmontan: siguen en el DOM en `display: none`, y
  * Playwright no ve lo que está oculto — por eso todo lo de aquí se mide por
  * visibilidad y por el árbol de roles, nunca por presencia en el DOM.
  */
 test.describe("mando de consola en móvil", () => {
-  const JUEGOS = ["tetrix", "asteroides", "arkanoid", "buscaminas"] as const;
+  const JUEGOS = [
+    "tetrix",
+    "asteroides",
+    "arkanoid",
+    "buscaminas",
+    "serpiente",
+  ] as const;
 
   test.beforeEach(async ({ isMobile }) => {
     test.skip(!isMobile, "el mando sólo existe por debajo de 720px");
   });
 
-  test("el tubo se queda sin un solo botón visible en los cuatro juegos", async ({
+  test("el tubo se queda sin un solo botón visible en los cinco juegos", async ({
     page,
   }) => {
     await signIn(page);
@@ -1671,7 +2064,7 @@ test.describe("mando de consola en móvil", () => {
       .toBeLessThan(1);
   });
 
-  test("el espacio de juego mide exactamente lo mismo en los cuatro", async ({
+  test("el espacio de juego mide exactamente lo mismo en los cinco", async ({
     page,
   }) => {
     await signIn(page);
@@ -1682,7 +2075,9 @@ test.describe("mando de consola en móvil", () => {
       await expect(page.locator(".game-pad")).toBeVisible();
       medidas.push(
         await page
-          .locator(".tetris-stage, .rocks-stage, .ark-stage, .minas-stage")
+          .locator(
+            ".tetris-stage, .rocks-stage, .ark-stage, .minas-stage, .snake-stage",
+          )
           .evaluate((el) => {
             const r = el.getBoundingClientRect();
             return { w: r.width, h: r.height };
@@ -1709,7 +2104,7 @@ test.describe("mando de consola en móvil", () => {
     await expect(page.locator(".crt-screen .tetris-next")).toBeVisible();
   });
 
-  test("se juega de verdad con el mando en los cuatro juegos", async ({
+  test("se juega de verdad con el mando en los cinco juegos", async ({
     page,
   }) => {
     await signIn(page);
@@ -1757,6 +2152,17 @@ test.describe("mando de consola en móvil", () => {
     antes = await huella("canvas.minas-board");
     await pulsar("Mover el cursor a la derecha", 60);
     expect(await huella("canvas.minas-board")).not.toBe(antes);
+
+    // SERPIENTE se mueve sola, así que «la huella cambió» no probaría nada
+    // aquí. Lo que se comprueba es el **rumbo**: la cabeza arranca en el centro
+    // mirando a la derecha, y tras pulsar ▲ un segundo tiene que haber subido
+    // de fila. `cabezaSerpiente` la localiza por color (§ su propio bloque).
+    await page.goto("/jugar/serpiente");
+    await expect(page.locator(".snake-board")).toBeVisible();
+    const filaInicial = (await cabezaSerpiente(page)).fila;
+    await pulsar("Girar hacia arriba", 60);
+    await page.waitForTimeout(700);
+    expect((await cabezaSerpiente(page)).fila).toBeLessThan(filaInicial);
   });
 
   /**
@@ -1927,6 +2333,7 @@ test.describe("el reproductor de escritorio no se entera del mando", () => {
       ["asteroides", ".rocks-side .rocks-pad .btn"],
       ["arkanoid", ".ark-pad .btn"],
       ["buscaminas", ".minas-side .minas-pad .btn"],
+      ["serpiente", ".snake-pad .btn"],
     ] as const) {
       await page.goto(`/jugar/${slug}`);
       await expect(page.locator(".crt-screen")).toBeVisible();
@@ -2186,7 +2593,7 @@ test.describe("salón de la fama", () => {
     await page.goto("/salon");
     // Nadie ha jugado todavía: sin podio, con el mensaje de estado vacío.
     await expect(page.locator(".podium-slot")).toHaveCount(0);
-    await expect(page.locator(".hall-tabs .chip")).toHaveCount(4);
+    await expect(page.locator(".hall-tabs .chip")).toHaveCount(5);
     await expect(page.getByText("AÚN NADIE HA JUGADO")).toBeVisible();
   });
 
