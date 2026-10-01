@@ -10,6 +10,12 @@
  * referencia) llegan como parámetro de `createState()` desde `games.vidas`
  * (SPEC 18), no como constante fija.
  *
+ * La SPEC 24 añade premios que caen al romper un ladrillo, copiando el
+ * vocabulario `Drop`/`DropKind`/`DROP_CHANCE` de `lib/asteroids.ts`: una
+ * segunda bola (`balls[]` sustituye al `ball` singular, y `serving` pasa de
+ * ser del estado a ser de cada bola) y un ensanche de pala que persiste entre
+ * niveles y se pierde al perder una vida.
+ *
  * El estado se muta in situ a propósito: el componente lo guarda en un `useRef`
  * y pinta en un canvas, así que un objeto nuevo por fotograma no aportaría nada.
  */
@@ -28,7 +34,8 @@ export const ORIGIN_Y = 80;
 /** Duración del destello de un ladrillo roto, en ms. */
 export const BURST_MS = 150;
 
-const PADDLE_W = 81;
+/** Ancho base de la pala, antes de cualquier ensanche. */
+export const PADDLE_W = 81;
 const PADDLE_H = 14;
 const PADDLE_Y = 560;
 const BALL_SIZE = 16;
@@ -52,6 +59,19 @@ const V_MAX = 800;
  */
 const MAX_STEP_PX = 8;
 
+/** Lado del premio que cae, en px. Igual que `BALL_SIZE`: se lee a la misma distancia. */
+const DROP_SIZE = 16;
+/** Velocidad de caída del premio, en px/s. Más lento que la bola del nivel 1. */
+const DROP_SPEED = 180;
+/** Ensanche de la pala por cada lado, por premio recogido. */
+export const WIDEN_PER_PICK = 15;
+/** Tope de ensanches acumulados. */
+const MAX_WIDENINGS = 3;
+/** Tope duro de bolas en pantalla. */
+const MAX_BALLS = 2;
+/** Probabilidad de que un ladrillo roto suelte un premio, por tipo. */
+const DROP_CHANCE = 0.15;
+
 /** 1–7: índice de color de ladrillo. Nunca 0: un ladrillo muerto se marca con `alive`. */
 export type BrickType = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -74,16 +94,42 @@ export type Burst = {
   elapsed: number;
 };
 
+/** Las dos habilidades. Mismo patrón que `DropKind` en lib/asteroids.ts. */
+export type DropKind = "ball" | "paddle";
+
+/** Premio que cae: recto, a velocidad constante, sin física. */
+export type Drop = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  kind: DropKind;
+};
+
+export type Ball = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  vx: number;
+  vy: number;
+  /** Pegada a la pala esperando saque. Es de la bola, no del estado. */
+  serving: boolean;
+};
+
 export type ArkanoidState = {
   paddle: { x: number; y: number; w: number; h: number };
-  ball: { x: number; y: number; w: number; h: number; vx: number; vy: number };
+  balls: Ball[];
   bricks: Brick[];
   bursts: Burst[];
+  drops: Drop[];
+  /** Ensanches acumulados, 0-3. Persiste entre niveles. */
+  widenings: number;
+  /** Premios ya soltados en este nivel, uno por tipo. Se resetea al subir. */
+  droppedThisLevel: Record<DropKind, boolean>;
   score: number;
   level: number;
   lives: number;
-  /** La bola está pegada a la pala esperando a LANZAR. */
-  serving: boolean;
   /** Saques de esta partida; decide hacia qué lado sale la bola. */
   serves: number;
   /** true cuando se pierde la última vida: el reproductor abre el modal. */
@@ -234,6 +280,39 @@ export function paddleSpeed(level: number): number {
   return Math.max(480, ballSpeed(level) * 1.5);
 }
 
+function createBall(): Ball {
+  return {
+    x: 0,
+    y: 0,
+    w: BALL_SIZE,
+    h: BALL_SIZE,
+    vx: 0,
+    vy: 0,
+    serving: true,
+  };
+}
+
+/** Mientras `ball.serving` es true la bola sigue a la pala: se puede colocar el saque. */
+function stickBall(state: ArkanoidState, ball: Ball): void {
+  const { paddle } = state;
+  ball.x = paddle.x + (paddle.w - ball.w) / 2;
+  ball.y = paddle.y - ball.h;
+  ball.vx = 0;
+  ball.vy = 0;
+}
+
+/**
+ * Aplica `widenings` al ancho de la pala, manteniendo su centro y recolocando
+ * dentro del campo. Se llama al crecer y al encoger: en los dos casos el
+ * ancho puede dejar la pala fuera del borde derecho si no se recoloca.
+ */
+function applyPaddleWidth(state: ArkanoidState): void {
+  const { paddle } = state;
+  const cx = paddle.x + paddle.w / 2;
+  paddle.w = PADDLE_W + state.widenings * 2 * WIDEN_PER_PICK;
+  paddle.x = clamp(cx - paddle.w / 2, 0, WIDTH - paddle.w);
+}
+
 export function createState(lives: number): ArkanoidState {
   const state: ArkanoidState = {
     paddle: {
@@ -242,49 +321,44 @@ export function createState(lives: number): ArkanoidState {
       w: PADDLE_W,
       h: PADDLE_H,
     },
-    ball: {
-      x: (WIDTH - BALL_SIZE) / 2,
-      y: PADDLE_Y - BALL_SIZE,
-      w: BALL_SIZE,
-      h: BALL_SIZE,
-      vx: 0,
-      vy: 0,
-    },
+    balls: [],
     bricks: layout(1),
     bursts: [],
+    drops: [],
+    widenings: 0,
+    droppedThisLevel: { ball: false, paddle: false },
     score: 0,
     level: 1,
     lives,
-    serving: true,
     serves: 0,
     over: false,
   };
-  stickBall(state);
+  const ball = createBall();
+  stickBall(state, ball);
+  state.balls.push(ball);
   return state;
 }
 
-/** Mientras `serving` es true la bola sigue a la pala: se puede colocar el saque. */
-function stickBall(state: ArkanoidState): void {
-  const { paddle, ball } = state;
-  ball.x = paddle.x + (paddle.w - ball.w) / 2;
-  ball.y = paddle.y - ball.h;
-  ball.vx = 0;
-  ball.vy = 0;
-}
-
 /**
- * Lanza la bola a 30° de la vertical, alternando el lado con `serves % 2`.
- * Determinista a propósito: sin `Math.random()` en el arranque, un test puede
- * afirmar que tras LANZAR la puntuación acaba siendo mayor que cero.
+ * Lanza toda bola pegada a la pala, a 30° de la vertical, alternando el lado
+ * con `serves % 2`. Determinista a propósito: sin `Math.random()` en el
+ * arranque, un test puede afirmar que tras LANZAR la puntuación acaba siendo
+ * mayor que cero. En la práctica sólo hay una bola `serving` a la vez: la
+ * segunda bola de un premio nace pegada mientras la primera ya está en juego.
  */
 export function serve(state: ArkanoidState): void {
-  if (!state.serving || state.over) return;
+  if (state.over) return;
   const v = ballSpeed(state.level);
   const dir = state.serves % 2 === 0 ? 1 : -1;
-  state.ball.vx = v * Math.sin(SERVE_ANGLE) * dir;
-  state.ball.vy = -v * Math.cos(SERVE_ANGLE);
-  state.serves++;
-  state.serving = false;
+  let served = false;
+  for (const ball of state.balls) {
+    if (!ball.serving) continue;
+    ball.vx = v * Math.sin(SERVE_ANGLE) * dir;
+    ball.vy = -v * Math.cos(SERVE_ANGLE);
+    ball.serving = false;
+    served = true;
+  }
+  if (served) state.serves++;
 }
 
 export function movePaddle(
@@ -298,19 +372,19 @@ export function movePaddle(
     0,
     WIDTH - paddle.w,
   );
-  if (state.serving) stickBall(state);
+  for (const ball of state.balls) if (ball.serving) stickBall(state, ball);
 }
 
 /** Centra la pala en `cx` (coordenadas lógicas): arrastre con dedo o ratón. */
 export function setPaddleX(state: ArkanoidState, cx: number): void {
   const { paddle } = state;
   paddle.x = clamp(cx - paddle.w / 2, 0, WIDTH - paddle.w);
-  if (state.serving) stickBall(state);
+  for (const ball of state.balls) if (ball.serving) stickBall(state, ball);
 }
 
 /** El rebote en la pala sale del punto de impacto, así que el jugador apunta. */
-function bounceOffPaddle(state: ArkanoidState): void {
-  const { paddle, ball } = state;
+function bounceOffPaddle(state: ArkanoidState, ball: Ball): void {
+  const { paddle } = state;
   const ballCx = ball.x + ball.w / 2;
   const paddleCx = paddle.x + paddle.w / 2;
   const offset = clamp((ballCx - paddleCx) / (paddle.w / 2), -1, 1);
@@ -323,34 +397,111 @@ function bounceOffPaddle(state: ArkanoidState): void {
   ball.y = paddle.y - ball.h;
 }
 
-/** Se pierde la bola: una vida menos y vuelta al saque, con el muro intacto. */
-function loseBall(state: ArkanoidState): void {
+/**
+ * Se pierde una bola. Con más en juego, sólo se quita: sin coste. Si era la
+ * última, una vida menos, se pierde el último ensanche y vuelta al saque con
+ * una bola nueva.
+ */
+function loseBall(state: ArkanoidState, ball: Ball): void {
+  state.balls = state.balls.filter((b) => b !== ball);
+  if (state.balls.length > 0) return;
+
   state.lives--;
   if (state.lives <= 0) {
     state.lives = 0;
     state.over = true;
     return;
   }
-  state.serving = true;
-  stickBall(state);
+  state.widenings = Math.max(0, state.widenings - 1);
+  applyPaddleWidth(state);
+  const next = createBall();
+  stickBall(state, next);
+  state.balls.push(next);
 }
 
-/** Muro limpio: bonus, nivel nuevo, muro nuevo y bola más rápida. */
+/** Muro limpio: bonus, nivel nuevo, muro nuevo, premios reseteados y bola(s) al saque. */
 function clearLevel(state: ArkanoidState): void {
   state.score += 100 * state.level;
   state.level++;
   state.bricks = layout(state.level);
-  state.serving = true;
-  stickBall(state);
+  state.drops = [];
+  state.droppedThisLevel = { ball: false, paddle: false };
+  for (const ball of state.balls) {
+    ball.serving = true;
+    stickBall(state, ball);
+  }
 }
 
 /**
- * Un subpaso: mueve la bola y resuelve paredes, pala y un ladrillo como mucho.
- * Devuelve true si ha roto un ladrillo, para que `step` sepa cuándo merece la
- * pena comprobar si el muro ha quedado limpio.
+ * Decide si el ladrillo roto suelta un premio: uno por tipo y por nivel, con
+ * `"ball"` exigiendo además que haya exactamente una bola en pantalla —con dos
+ * no aparece, y el tope duro es MAX_BALLS.
  */
-function advance(state: ArkanoidState, dt: number): boolean {
-  const { ball, paddle } = state;
+function maybeDropFrom(state: ArkanoidState, brick: Brick): void {
+  const kinds: DropKind[] = [];
+  if (!state.droppedThisLevel.ball && state.balls.length === 1)
+    kinds.push("ball");
+  if (!state.droppedThisLevel.paddle) kinds.push("paddle");
+
+  for (const kind of kinds) {
+    if (Math.random() >= DROP_CHANCE) continue;
+    state.drops.push({
+      x: brick.x + brick.w / 2 - DROP_SIZE / 2,
+      y: brick.y + brick.h / 2 - DROP_SIZE / 2,
+      w: DROP_SIZE,
+      h: DROP_SIZE,
+      kind,
+    });
+    state.droppedThisLevel[kind] = true;
+  }
+}
+
+/** Recoge el premio: `"ball"` añade una bola pegada; `"paddle"` ensancha. */
+function collectDrop(state: ArkanoidState, drop: Drop): void {
+  if (drop.kind === "ball") {
+    if (state.balls.length >= MAX_BALLS) return;
+    const ball = createBall();
+    stickBall(state, ball);
+    state.balls.push(ball);
+    return;
+  }
+  state.widenings = Math.min(MAX_WIDENINGS, state.widenings + 1);
+  applyPaddleWidth(state);
+}
+
+/**
+ * Avanza los premios en caída recta, fuera del bucle de subpasos: no
+ * participan en la física, así que no necesitan su precisión. Los que tocan
+ * la pala se recogen; los que pasan del suelo se pierden.
+ */
+function advanceDrops(state: ArkanoidState, dt: number): void {
+  const { paddle } = state;
+  const remaining: Drop[] = [];
+  for (const drop of state.drops) {
+    drop.y += DROP_SPEED * dt;
+
+    const caught =
+      drop.y + drop.h > paddle.y &&
+      drop.y < paddle.y + paddle.h &&
+      drop.x + drop.w > paddle.x &&
+      drop.x < paddle.x + paddle.w;
+    if (caught) {
+      collectDrop(state, drop);
+      continue;
+    }
+    if (drop.y > HEIGHT) continue;
+    remaining.push(drop);
+  }
+  state.drops = remaining;
+}
+
+/**
+ * Un subpaso de una bola: la mueve y resuelve paredes, pala y un ladrillo
+ * como mucho. Devuelve true si ha roto un ladrillo, para que `step` sepa
+ * cuándo merece la pena comprobar si el muro ha quedado limpio.
+ */
+function advanceBall(state: ArkanoidState, ball: Ball, dt: number): boolean {
+  const { paddle } = state;
 
   ball.x += ball.vx * dt;
   ball.y += ball.vy * dt;
@@ -376,7 +527,7 @@ function advance(state: ArkanoidState, dt: number): boolean {
     ball.y + ball.h > paddle.y &&
     ball.y < paddle.y + paddle.h
   ) {
-    bounceOffPaddle(state);
+    bounceOffPaddle(state, ball);
   }
 
   // Un ladrillo por subpaso como máximo, igual que la referencia.
@@ -423,11 +574,11 @@ function advance(state: ArkanoidState, dt: number): boolean {
       elapsed: 0,
     });
     state.score += 10 * state.level;
+    maybeDropFrom(state, brick);
     broke = true;
     break;
   }
 
-  if (ball.y > HEIGHT) loseBall(state);
   return broke;
 }
 
@@ -441,19 +592,38 @@ export function step(state: ArkanoidState, dt: number): void {
   for (const burst of state.bursts) burst.elapsed += delta * 1000;
   state.bursts = state.bursts.filter((b) => b.elapsed < BURST_MS);
 
-  if (state.serving) return;
+  // Los premios caen fuera del bucle de subpasos: no colisionan con nada.
+  advanceDrops(state, delta);
 
-  const dist = Math.hypot(state.ball.vx, state.ball.vy) * delta;
-  const steps = Math.max(1, Math.ceil(dist / MAX_STEP_PX));
+  if (state.balls.every((b) => b.serving)) return;
+
+  // Todas las bolas comparten siempre el mismo módulo de velocidad —el del
+  // nivel—, así que los subpasos se calculan una sola vez para todas.
+  const v = ballSpeed(state.level);
+  const steps = Math.max(1, Math.ceil((v * delta) / MAX_STEP_PX));
+  const sub = delta / steps;
+
   for (let i = 0; i < steps; i++) {
-    const broke = advance(state, delta / steps);
+    let broke = false;
+    for (const ball of state.balls) {
+      if (ball.serving) continue;
+      if (advanceBall(state, ball, sub)) broke = true;
+    }
+
+    // Bolas caídas del fondo en este subpaso: se resuelven después de mover
+    // todas, nunca a mitad del recorrido de las demás.
+    const fallen = state.balls.filter((b) => !b.serving && b.y > HEIGHT);
+    for (const ball of fallen) {
+      loseBall(state, ball);
+      if (state.over) return;
+    }
+
     // El muro se comprueba antes de salir: romper el último ladrillo y perder
     // la bola en el mismo subpaso no puede dejar el nivel sin pasar.
-    if (state.over) return;
     if (broke && !state.bricks.some((b) => b.alive)) {
       clearLevel(state);
       return;
     }
-    if (state.serving) return;
+    if (state.balls.every((b) => b.serving)) return;
   }
 }

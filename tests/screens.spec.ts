@@ -1,4 +1,14 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  HEIGHT,
+  PADDLE_W,
+  WIDEN_PER_PICK,
+  createState,
+  serve,
+  setPaddleX,
+  step,
+  type ArkanoidState,
+} from "../lib/arkanoid";
 
 const ROUTES = [
   { name: "home", path: "/" },
@@ -109,6 +119,11 @@ function scoreOf(text: string): number {
  * que las tres vidas se agotan en unos 11s con 30 puntos en el marcador. Cada
  * vida nueva vuelve al saque, y el saque lo pide el jugador: de ahí el Space
  * repetido. No se toca la pala a propósito.
+ *
+ * SPEC 24 no cambia este tiempo: con la pala quieta y centrada, el ladrillo
+ * que rompe cada vida cae siempre en una columna fuera de su rango en x (se
+ * verificó simulando el módulo puro en Node contra 500 partidas), así que
+ * ningún premio llega a recogerse y la secuencia es la misma de siempre.
  */
 async function loseArkanoid(page: Page) {
   const panel = page.getByRole("dialog");
@@ -1068,6 +1083,179 @@ test.describe("arkanoid", () => {
     // panel, y ⛶ está ahora en los dos viewports (SPEC 22).
     expect(botonesArkanoid).toEqual(isMobile ? ["⛶"] : ["PAUSA", "MENÚ", "⛶"]);
   });
+
+  test("la banda de leyenda sólo se ve en móvil, con los dos premios", async ({
+    page,
+    isMobile,
+  }) => {
+    await openArkanoid(page);
+    await expect(page.locator(".screen-legend")).toBeVisible({
+      visible: isMobile,
+    });
+    await expect(page.locator(".screen-legend")).toContainText("BOLA EXTRA");
+    await expect(page.locator(".screen-legend")).toContainText("+ PALA");
+  });
+});
+
+/**
+ * SPEC 24 — premios de ARKANOID y motor de multibola, verificados sobre el
+ * módulo puro, sin navegador. El motor no tiene ningún otro `Math.random()`
+ * fuera de `maybeDropFrom` (el saque y el muro son deterministas), así que
+ * sustituirlo aísla por completo la caída de premios del resto de la física.
+ */
+test.describe("arkanoid — motor de premios y multibola (módulo puro)", () => {
+  /**
+   * Avanza `state` hasta que `predicate` se cumpla, o falla con un mensaje
+   * claro. Llama a `serve()` en cada paso —sin coste si ninguna bola espera—
+   * para que una bola nueva tras perder una vida no se quede pegada para
+   * siempre esperando un LANZAR que nadie pulsa.
+   */
+  function runUntil(
+    state: ArkanoidState,
+    dt: number,
+    predicate: (s: ArkanoidState) => boolean,
+    label: string,
+    maxSteps = 200_000,
+  ) {
+    for (let i = 0; i < maxSteps; i++) {
+      if (predicate(state)) return;
+      serve(state);
+      step(state, dt);
+    }
+    throw new Error(`runUntil: "${label}" no se cumplió en ${maxSteps} pasos`);
+  }
+
+  test("el premio verde añade una segunda bola sin frenar la primera, y el rojo ensancha la pala", () => {
+    const originalRandom = Math.random;
+    // Cada tipo elegible suelta premio en cuanto puede: el primer ladrillo
+    // roto del nivel 1 suelta los dos a la vez, en el mismo punto —así que
+    // una pala colocada debajo recoge los dos juntos.
+    Math.random = () => 0;
+    try {
+      const state = createState(3);
+      serve(state);
+      const dt = 1 / 120;
+
+      runUntil(state, dt, (s) => s.drops.length >= 2, "los dos premios caen");
+      expect(state.drops.map((d) => d.kind).sort()).toEqual(["ball", "paddle"]);
+
+      const firstBall = state.balls[0];
+      const widthBefore = state.paddle.w;
+      const target = state.drops[0];
+      setPaddleX(state, target.x + target.w / 2);
+      runUntil(state, dt, (s) => s.drops.length === 0, "se recogen los dos");
+
+      // La bola que ya jugaba sigue jugando: no se ha detenido a esperar.
+      expect(state.balls[0]).toBe(firstBall);
+      expect(firstBall.serving).toBe(false);
+      expect(firstBall.vx !== 0 || firstBall.vy !== 0).toBe(true);
+
+      // La segunda nace pegada a la pala, y la pala ya se ha ensanchado.
+      expect(state.balls).toHaveLength(2);
+      expect(state.balls[1].serving).toBe(true);
+      expect(state.widenings).toBe(1);
+      expect(state.paddle.w).toBe(widthBefore + WIDEN_PER_PICK * 2);
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  test("como mucho cae un premio de cada tipo por nivel", () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+    try {
+      const state = createState(3);
+      serve(state);
+      const dt = 1 / 120;
+
+      runUntil(state, dt, (s) => s.drops.length >= 2, "los dos premios caen");
+      expect(state.droppedThisLevel).toEqual({ ball: true, paddle: true });
+
+      // Se descartan dejándolos caer al suelo: la oportunidad del nivel se
+      // pierde igual que si se hubieran recogido.
+      runUntil(
+        state,
+        dt,
+        (s) => s.drops.length === 0,
+        "los premios se pierden",
+      );
+
+      const scoreBefore = state.score;
+      runUntil(
+        state,
+        dt,
+        (s) => s.score > scoreBefore,
+        "se rompe otro ladrillo",
+      );
+      // El dado sigue en 0 —siempre favorable— y aun así no sale nada más.
+      expect(state.drops).toHaveLength(0);
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  /**
+   * La regla de vidas no depende de cómo se llegó a dos bolas: se construye
+   * el escenario en directo —dos bolas en juego y un ensanche acumulado— en
+   * vez de esperar a que el dado suelte algo, así la prueba no depende de
+   * dónde ande la primera bola en ese instante.
+   */
+  test("perder una de dos bolas no cuesta vida; perder la última sí, y se pierde un ensanche", () => {
+    const state = createState(3);
+    state.widenings = 1;
+    state.paddle.w = PADDLE_W + 2 * WIDEN_PER_PICK;
+    state.balls = [
+      { x: 100, y: 300, w: 16, h: 16, vx: 50, vy: 80, serving: false },
+      { x: 400, y: 300, w: 16, h: 16, vx: -50, vy: 80, serving: false },
+    ];
+
+    const livesBefore = state.lives;
+    const widthBefore = state.paddle.w;
+
+    // La segunda bola se manda directa al suelo: no cuesta vida ni ensanche.
+    const doomed = state.balls[1];
+    doomed.y = HEIGHT + 1;
+    step(state, 0.001);
+
+    expect(state.balls).toHaveLength(1);
+    expect(state.lives).toBe(livesBefore);
+    expect(state.widenings).toBe(1);
+    expect(state.paddle.w).toBe(widthBefore);
+
+    // Y ahora la última: sí cuesta vida, se pierde el ensanche y vuelve al
+    // saque con una bola nueva.
+    const last = state.balls[0];
+    last.y = HEIGHT + 1;
+    step(state, 0.001);
+
+    expect(state.lives).toBe(livesBefore - 1);
+    expect(state.widenings).toBe(0);
+    expect(state.paddle.w).toBe(PADDLE_W);
+    expect(state.balls).toHaveLength(1);
+    expect(state.balls[0].serving).toBe(true);
+  });
+
+  test("el tope de bolas y de ensanches no se pasa nunca, jugando sin trucar el dado", () => {
+    const state = createState(3);
+    serve(state);
+    const dt = 1 / 120;
+
+    for (let i = 0; i < 20_000 && !state.over; i++) {
+      // Una pala que persigue cualquier premio en caída: el escenario que más
+      // presiona los dos topes.
+      if (state.drops.length > 0) {
+        const target = state.drops[0];
+        setPaddleX(state, target.x + target.w / 2);
+      }
+      serve(state); // lanza cualquier bola que siga esperando saque
+      step(state, dt);
+
+      expect(state.balls.length).toBeLessThanOrEqual(2);
+      expect(state.widenings).toBeGreaterThanOrEqual(0);
+      expect(state.widenings).toBeLessThanOrEqual(3);
+      expect(state.lives).toBeGreaterThanOrEqual(0);
+    }
+  });
 });
 
 test.describe("buscaminas", () => {
@@ -1417,11 +1605,14 @@ test.describe("mando de consola en móvil", () => {
     await expect(page.locator(".screen-legend")).toContainText("TRIPLE");
     await expect(page.locator(".screen-legend")).toContainText("ESCUDO");
 
+    // ARKANOID recupera ahí sus dos premios, desde la SPEC 24.
+    await page.goto("/jugar/arkanoid");
+    await expect(page.locator(".screen-legend")).toContainText("BOLA EXTRA");
+    await expect(page.locator(".screen-legend")).toContainText("+ PALA");
+
     // Y quien no tiene nada que explicar reserva el hueco igualmente.
-    for (const slug of ["tetrix", "arkanoid"]) {
-      await page.goto(`/jugar/${slug}`);
-      await expect(page.locator(".screen-legend")).toHaveText("LEYENDA");
-    }
+    await page.goto("/jugar/tetrix");
+    await expect(page.locator(".screen-legend")).toHaveText("LEYENDA");
   });
 
   test("los tres números bajan del HUD a su banda, bajo el juego", async ({

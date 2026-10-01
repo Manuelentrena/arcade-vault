@@ -1892,6 +1892,12 @@
 .screen-legend .mine {
   color: var(--red);
 }
+.screen-legend .ark-ball {
+  color: var(--green);
+}
+.screen-legend .ark-paddle {
+  color: var(--red);
+}
 
 /* --- la banda del marcador, debajo del juego ---
    Los mismos tres números que el HUD y con sus mismos colores: puntuación en
