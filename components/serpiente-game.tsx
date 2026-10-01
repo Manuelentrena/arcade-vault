@@ -117,8 +117,10 @@ function SerpienteGameImpl({
 
     const [green, red, line] = colorsRef.current;
 
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    // Transparente, no negro: igual que TETRIX, el lienzo deja ver el
+    // resplandor de `.snake-stage` que hay detrás. Rellenarlo de negro lo
+    // tapaba y el tablero quedaba como una losa plana dentro del tubo.
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
     // Rejilla tenue: sin ella la serpiente flota y el paso discreto no se lee.
     ctx.strokeStyle = line;

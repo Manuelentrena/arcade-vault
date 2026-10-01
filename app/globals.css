@@ -2486,9 +2486,13 @@
   justify-content: center;
   gap: clamp(6px, 1.5%, 14px);
   padding: clamp(6px, 1.5%, 14px);
+  /* El mismo resplandor que `.tetris-stage` y `.minas-stage`, no uno verde
+     propio: el tubo es el mismo mueble en los cinco juegos y el color del
+     juego lo ponen sus piezas, no su fondo. El lienzo se limpia con
+     `clearRect`, así que este gradiente se ve a través del tablero. */
   background: radial-gradient(
     ellipse 45% 70% at 50% 50%,
-    #001a06 0%,
+    #0a0030 0%,
     #000 45%,
     transparent 25%
   );
