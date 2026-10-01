@@ -612,11 +612,22 @@
     inset 0 0 6px rgba(255, 0, 110, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
+.av-nav .logo-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .av-nav .logo-text {
   font-family: var(--pixel);
   font-size: 12px;
   letter-spacing: 0.12em;
   white-space: nowrap;
+}
+.av-nav .logo-version {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
 }
 .av-nav .links {
   display: flex;
