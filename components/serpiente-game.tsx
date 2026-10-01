@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -62,7 +63,7 @@ type SerpienteGameProps = {
   padRef: Ref<PadHandle>;
 };
 
-export function SerpienteGame({
+function SerpienteGameImpl({
   paused,
   onTogglePause,
   onRun,
@@ -395,3 +396,5 @@ export function SerpienteGame({
     </>
   );
 }
+
+export const SerpienteGame = memo(SerpienteGameImpl);

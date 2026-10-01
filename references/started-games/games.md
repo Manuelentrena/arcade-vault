@@ -233,6 +233,23 @@ still at the centre, the brick that each of the three lives breaks always lands 
 x-range (verified by running the pure module in Node across 500 games), so that helper's ~11-second,
 30-point sequence is completely unaffected by SPEC 24 — no power-up is ever close enough to be caught.
 
+## Known performance debt in the shared player
+
+`arcade-performance-booster` found one thing on its SERPIENTE run (SPEC 25) that is **not** a SERPIENTE
+problem and was deliberately left out of that spec: `GamePlayer` holds the run in `useState`, so every
+push of `score`/`lives`/`level` through `onRun` re-renders the whole shared player — for the engines that
+publish often, that is close to once per frame. The agent's fix was to make `runRef` the source of truth
+and write the six HUD `.v` nodes by hand (`.player-hud` and `.screen-stats`, three each), plus a
+`panelScore` state fixed once when the panel opens, because a ref may not be read during render
+(`react-hooks/refs`). It was implemented, verified by hand in SERPIENTE and BUSCAMINAS — the figures stay
+live, survive the `PAUSA` and `MENÚ` re-renders, and the panel shows the right score — and then
+**reverted**, because SPEC 25 had promised in writing not to touch the HUD or `game-player.tsx` beyond its
+`ENGINES` row.
+
+It belongs to a spec of its own: it changes the shared player for all five engines, so it deserves its own
+tests and its own review rather than riding inside a game's spec. What survived from that run is the
+`memo()` around `SerpienteGame`, which is the engine's own file.
+
 ## Adding a sixth game
 
 Deciding _which_ game comes first, and that is the **`game-planner`** subagent
