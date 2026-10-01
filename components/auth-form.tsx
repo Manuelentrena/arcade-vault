@@ -320,8 +320,10 @@ export function AuthForm() {
 
     // `next`, no HOME: a quien el proxy rebotó desde /jugar/[id] se le
     // devuelve al juego que pidió, no a la biblioteca.
-    router.push(next);
-    router.refresh();
+    // Navegación dura, no router.push: el nav precarga /biblioteca en cuanto
+    // el enlace entra en el viewport de /auth, antes de que exista sesión —
+    // router.push serviría esa versión cacheada sin sesión.
+    window.location.assign(next);
   };
 
   const switchTab = (to: Tab) => {
