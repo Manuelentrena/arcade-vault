@@ -11,7 +11,7 @@ export function Footer() {
         letterSpacing: "0.16em",
       }}
     >
-      © 2026 ARCADE VAULT · HECHO CON PIXELES Y NEÓN · v1.0.2
+      © 2026 ARCADE VAULT · HECHO CON PIXELES Y NEÓN · v1.1.0
     </footer>
   );
 }
