@@ -41,6 +41,28 @@ function relativeTime(iso: string): string {
   return `hace ${days} d`;
 }
 
+/** Token firmado por `start_game_session` (SPEC 29) y su caducidad ISO 8601. */
+export type GameSession = { token: string; expiresAt: string };
+
+/**
+ * Pide al servidor el token que certifica una carga reciente de /jugar/[id]
+ * para este usuario y este juego. `save_score` lo exige antes de insertar.
+ * `null` si la RPC falla (p. ej. el secreto del Vault no está sembrado):
+ * el guardado real queda deshabilitado en vez de romper la carga de la
+ * página.
+ */
+export async function startGameSession(
+  gameSlug: string,
+): Promise<GameSession | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .rpc("start_game_session", { p_slug: gameSlug })
+    .single();
+
+  if (error || !data) return null;
+  return { token: data.token, expiresAt: data.expires_at };
+}
+
 /** `scores.game_id` es el uuid interno de `games`; las páginas solo conocen el slug. */
 async function gameIdForSlug(slug: string): Promise<string | null> {
   const supabase = await createClient();

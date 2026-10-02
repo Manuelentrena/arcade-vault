@@ -19,6 +19,7 @@ import { GamePad } from "@/components/game-pad";
 import { SerpienteGame } from "@/components/serpiente-game";
 import { TetrisGame } from "@/components/tetris-game";
 import type { Game } from "@/lib/supabase/games";
+import type { GameSession } from "@/lib/supabase/scores";
 import { displayName } from "@/lib/supabase/user";
 import { createClient } from "@/lib/supabase/client";
 
@@ -169,11 +170,14 @@ export function GamePlayer({
   game,
   restored,
   initialBest = null,
+  gameSession = null,
 }: {
   game: Game;
   restored?: RestoredRun;
   /** Mejor marca real del usuario para este juego, si hay sesión no invitada. */
   initialBest?: number | null;
+  /** Token de sesión de partida (SPEC 29); `null` si `start_game_session` falló. */
+  gameSession?: GameSession | null;
 }) {
   const { user } = useSession();
   const engine = ENGINES[game.id];
@@ -321,6 +325,13 @@ export function GamePlayer({
    * igualmente y nunca confía en ese estado del cliente.
    */
   const handleSave = useCallback(async () => {
+    // Sin token no hay nada que enviar: el servidor lo rechazaría igual, pero
+    // aquí se trata como el mismo fallo de red/servidor de siempre, no como
+    // "no es récord" (que sí reflejaría una marca real).
+    if (!gameSession) {
+      setSaveError(true);
+      return;
+    }
     setSaving(true);
     setSaveError(false);
     const supabase = createClient();
@@ -329,6 +340,7 @@ export function GamePlayer({
         p_slug: game.id,
         p_score: run.score,
         p_level: run.level,
+        p_token: gameSession.token,
       })
       .single();
     setSaving(false);
@@ -345,15 +357,25 @@ export function GamePlayer({
       // manda, y el siguiente render ya pinta solo la rama de "no es récord".
       setBestScore(data.previous_best);
     }
-  }, [game.id, run.score, run.level]);
+  }, [game.id, run.score, run.level, gameSession]);
 
   // La partida recuperada de /auth se autoguarda si es récord; si no lo es,
   // el modal ya pinta esa rama sola con el `bestScore` inicial, sin llamar
   // al servidor. Se difiere con setTimeout(0): handleSave actualiza estado en
   // su primera línea (antes del primer await), y llamarlo en línea dentro del
   // efecto dispararía ese setState de forma síncrona durante el propio efecto.
+  //
+  // `autoSaveAttempted` es lo que de verdad para el efecto. `saved` solo pasa
+  // a `true` cuando el servidor confirma récord: un rechazo silencioso
+  // (token/techo/nivel, o antes nunca, una carrera perdida con
+  // `previous_best` todavía en null) deja `bestScore` en null o por debajo de
+  // `run.score`, así que `isRecord` sigue en true y, sin esta marca, el
+  // efecto reintentaría sin parar.
+  const autoSaveAttempted = useRef(false);
   useEffect(() => {
     if (!(recuperada && !isGuest && !saved && !saving && isRecord)) return;
+    if (autoSaveAttempted.current) return;
+    autoSaveAttempted.current = true;
     const id = setTimeout(() => void handleSave(), 0);
     return () => clearTimeout(id);
   }, [recuperada, isGuest, saved, saving, isRecord, handleSave]);
