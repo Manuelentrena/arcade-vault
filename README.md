@@ -488,6 +488,7 @@ npx skills@latest add Klerith/fernando-skills
 | [25 — SERPIENTE: quinto motor jugable](specs/25-serpiente.md)                                                                               | Aprobado     | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 |
 | [26 — Versión 1.0.0 y blog de cambios](specs/26-v1-0-0-y-blog-de-cambios.md)                                                                | Implementado | SPEC 01, SPEC 02                                        |
 | [27 — Consultas redundantes, redirección de invitado y actividad real del home](specs/27-arreglos-rendimiento-invitado-y-actividad-home.md) | Implementado | SPEC 04, 06, 07, 16, 17, 18, 26                         |
+| [28 — Limpieza de la suite de tests y condición de carrera del salón](specs/28-limpieza-tests-y-condicion-de-carrera-salon.md)              | Implementado | SPEC 06, 07, 16, 17, 18, 21, 22, 26, 27                 |
 
 ## Deuda conocida
 

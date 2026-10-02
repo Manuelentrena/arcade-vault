@@ -50,7 +50,7 @@ export function Nav() {
             <div className="logo-text neon-cyan">
               ARCADE <span className="neon-magenta">VAULT</span>
             </div>
-            <span className="logo-version">v1.0.1</span>
+            <span className="logo-version">v1.0.2</span>
           </div>
         </Link>
 
