@@ -169,6 +169,20 @@ npx supabase secrets set PURGE_SECRET=<PURGE_SECRET> GUEST_RETENTION_DAYS=30
 
 `GUEST_RETENTION_DAYS` es el plazo en días, 30 por defecto. Cambiarlo no exige migración. Antes de dar un despliegue por bueno, comprobar que `select count(*) from vault.decrypted_secrets` no da error de permisos: si el rol no pudiera leer la vista, la guarda no distinguiría «no hay secreto» de «no puedo leerlo» y la purga callaría para siempre.
 
+#### Secreto de sesión de partida (SPEC 29)
+
+`start_game_session` y `save_score` firman y verifican el token de sesión de partida con un secreto propio del Vault, `game_session_secret` — puramente de Postgres, no lo lee ninguna Edge Function ni entra en Vercel. En local lo siembra `supabase/seed.sql` en cada `db reset`, sin paso manual. En producción hay que crearlo **a mano, una vez, antes del `db push` de esta spec**: sin él, todo guardado real de puntuaciones queda roto (falla cerrado, no abierto) hasta crearlo.
+
+```bash
+openssl rand -base64 32     # el valor va solo en el sitio de abajo
+```
+
+```sql
+select vault.create_secret('<el valor generado>', 'game_session_secret');
+```
+
+**Nunca reutilizar el valor fijo de `seed.sql`** en producción: es público, está en el repo, y reusarlo tira por la borda el techo de seguridad del token.
+
 #### Ensayo y verificación manual
 
 `?dry_run=1` cuenta lo que se habría borrado sin borrar nada:
@@ -492,6 +506,7 @@ npx skills@latest add Klerith/fernando-skills
 | [26 — Versión 1.0.0 y blog de cambios](specs/26-v1-0-0-y-blog-de-cambios.md)                                                                | Implementado | SPEC 01, SPEC 02                                        |
 | [27 — Consultas redundantes, redirección de invitado y actividad real del home](specs/27-arreglos-rendimiento-invitado-y-actividad-home.md) | Implementado | SPEC 04, 06, 07, 16, 17, 18, 26                         |
 | [28 — Limpieza de la suite de tests y condición de carrera del salón](specs/28-limpieza-tests-y-condicion-de-carrera-salon.md)              | Implementado | SPEC 06, 07, 16, 17, 18, 21, 22, 26, 27                 |
+| [29 — RLS en `scores` y token de sesión de partida](specs/29-rls-scores-y-token-de-sesion.md)                                               | Implementado | SPEC 06, 07, 08, 16, 17, 18, 26                         |
 
 ## Deuda conocida
 
@@ -527,6 +542,30 @@ la biblioteca es algo que hay que decidir, no deducir.
 `registro por correo › el enlace de Mailpit confirma la cuenta y deja dentro` termina en
 `/auth?error=confirm` en los dos proyectos. Se reprodujo también sobre `main` limpio, así que no lo
 introdujo ninguna spec reciente. Sin diagnosticar.
+
+### Una marca fabricada pero plausible aún podría autoguardarse (riesgo aceptado en la SPEC 29)
+
+El token de `start_game_session` certifica que un usuario real cargó `/jugar/[id]` hace poco para ese
+juego — no que la puntuación que manda `save_score` se jugó de verdad. Un usuario autenticado puede
+navegar a mano a `/jugar/<slug>?puntuacion=<N>&nivel=<M>` y autoguardar `<N>` como marca suya, siempre
+que `<N>` no pase del techo global (10.000.000) y `<M>` sea un nivel real de ese juego. Queda acotado
+—no es ajeno a la cuenta de quien lo hace, no escala, caduca a los 60 minutos— pero sigue siendo
+tramposo. Aceptado a propósito en la SPEC 29 (ver su sección «Riesgos identificados»); dos vías para
+cerrarlo de verdad, candidatas a spec futura:
+
+- **Plausibilidad por tiempo transcurrido.** Emitir el token al _empezar_ la partida, no al cargar la
+  página, y en `save_score` exigir que la puntuación no supere un tope de "puntos por segundo" propio
+  de cada juego multiplicado por `now() - token.issued_at`. Cambio pequeño —un campo más en el token y
+  una cuenta en la función—, pero no es a prueba de balas: deja la pestaña abierta el tiempo que haga
+  falta y el ataque sigue siendo posible, solo que acotado a lo "cronológicamente plausible".
+- **Replay en servidor (la opción segura de verdad).** `lib/tetris.ts`, `lib/asteroides.ts`,
+  `lib/arkanoid.ts`, `lib/buscaminas.ts` y `lib/serpiente.ts` ya son funciones puras sin `document` ni
+  `window` — podrían correr en una Edge Function. El cliente mandaría el registro de inputs
+  (tecla + marca de tiempo) en vez del score; el servidor reproduce la partida con el mismo motor y
+  calcula la puntuación él mismo, así que nunca hay un número que venga del cliente en el que confiar.
+  Mucho más trabajo —capturar y transmitir el input stream, mantener el replay sincronizado con
+  cualquier cambio futuro en las reglas de cada motor, hacerlo para los cinco juegos—, pero es la única
+  vía que cierra el riesgo del todo en vez de acotarlo.
 
 ## Referencias
 

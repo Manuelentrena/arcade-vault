@@ -1,0 +1,40 @@
+export const metadata = {
+  title: "Más blindaje bajo el capó: llega la 1.1.0",
+  date: "2026-10-02",
+  version: "1.1.0",
+  bump: "Menor",
+};
+
+# Más blindaje bajo el capó: llega la 1.1.0
+
+No vas a ver una pantalla nueva ni un juego nuevo en esta entrada —y aun
+así es de las actualizaciones que más importan. Le hemos dado una vuelta
+de tuerca a la seguridad de la sala, por dentro, donde no se ve pero se
+nota.
+
+## Puntuaciones más seguras
+
+Una auditoría de seguridad encontró y nos permitió parchear dos
+vulnerabilidades en cómo se guardaban las puntuaciones. Las partidas
+ahora viajan con una sesión firmada por el servidor desde el momento en
+que entras a jugar, así que una marca guardada es, más que nunca, una
+marca de verdad. Tu progreso, tus récords y el Salón de la Fama no
+cambian en nada de cara a ti — simplemente están mejor guardados.
+De paso, pulimos un caso raro en el que recuperar una partida al volver
+de iniciar sesión podía intentar guardarla de más una y otra vez: ahora
+se guarda, como toca, una sola vez.
+
+## También incluye
+
+Desde la última entrada grande, dos arreglos menores ya viajaban
+calladitos en el casco de la nave:
+
+- Ajustes de rendimiento en las fichas de juego y el reproductor, un
+  tropiezo al entrar como invitado que quedó resuelto, y el panel de
+  actividad del inicio mostrando ahora movimiento real de la sala en vez
+  de relleno decorativo.
+- Una limpieza de la batería de pruebas interna y el cierre de una
+  pequeña carrera entre pruebas en el Salón de la Fama — invisible para
+  cualquier jugador, pero la sala queda más firme por dentro.
+
+Como siempre, gracias por jugar. Nos vemos en la próxima ficha.

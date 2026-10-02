@@ -37,3 +37,10 @@ insert into auth.identities (
   'email',
   now(), now(), now()
 );
+
+-- SPEC 29 — secreto de desarrollo para firmar el token de sesión de partida.
+-- Valor fijo y a diferencia del de la purga (opcional): guardar puntuaciones
+-- es funcionalidad core que la suite Playwright ejercita en casi todos los
+-- juegos, así que tiene que sobrevivir a un `db reset` sin pasos manuales.
+-- En producción se crea a mano un valor real, nunca este (ver README).
+select vault.create_secret('arcade-vault-dev-game-session-secret', 'game_session_secret');

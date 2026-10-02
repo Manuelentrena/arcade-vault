@@ -52,3 +52,7 @@ next-env.d.ts
 
 # playwright mcp scratch
 /.playwright-mcp/
+
+# auditoría interna de seguridad: documenta con PoC hallazgos aún sin
+# parchear (SECURITY.md), repo público, no entra al control de versiones
+/SECURITY.md
