@@ -30,7 +30,20 @@ export default defineConfig({
   },
   projects: [
     {
+      // Corre antes que desktop/mobile y una sola vez: ancla el orden de los
+      // dos tests que asumen el catálogo de scores vacío, para que no choquen
+      // con los tests en paralelo que guardan una puntuación real (SPEC 28).
+      name: "orden-global",
+      grep: /@orden-global/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
       name: "desktop",
+      dependencies: ["orden-global"],
+      grepInvert: /@orden-global/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -39,6 +52,8 @@ export default defineConfig({
     {
       // iPhone 13 emulado sobre Chromium: es el único motor que instalamos.
       name: "mobile",
+      dependencies: ["orden-global"],
+      grepInvert: /@orden-global/,
       use: { ...devices["iPhone 13"], browserName: "chromium" },
     },
   ],

@@ -300,18 +300,21 @@ references/templates/     # maqueta HTML/JSX original de la que salieron las pan
 
 ## Pruebas
 
-La suite vive entera en `tests/screens.spec.ts` y cubre humo, interacción y comparación visual. Se organiza por bloques: capturas de referencia, portada, biblioteca, detalle, reproductor, `tetrix`, `asteroides`, auth, salón de la fama, acerca, endpoint de contacto y responsive. Los dos bloques de juego no congelan el reloj: sus motores necesitan `requestAnimationFrame` vivo, y ninguno afirma nada que dependa del azar de la partida.
+La suite vive entera en `tests/screens.spec.ts` (105 bloques `test()`, SPEC 28) y cubre humo, interacción y comparación visual. Se organiza por bloques: capturas de referencia, portada, biblioteca, detalle, reproductor, `tetrix`, `asteroides`, `arkanoid`, `buscaminas`, `serpiente`, mando de consola en móvil, auth, salón de la fama, acerca, endpoint de contacto y responsive, más los motores puros de ARKANOID y SERPIENTE sin navegador. Los bloques de juego no congelan el reloj: los motores necesitan `requestAnimationFrame` vivo, y ninguno afirma nada que dependa del azar de la partida.
 
-Dos proyectos, ambos sobre Chromium (`playwright.config.ts`):
+Tres proyectos, todos sobre Chromium (`playwright.config.ts`):
 
-| Proyecto  | Viewport                      |
-| --------- | ----------------------------- |
-| `desktop` | 1440 × 900                    |
-| `mobile`  | iPhone 13 emulado (390 × 844) |
+| Proyecto       | Viewport                      | Qué corre                                                      |
+| -------------- | ----------------------------- | -------------------------------------------------------------- |
+| `orden-global` | 1440 × 900                    | Solo los 3 tests `@orden-global` (ver abajo), una vez cada uno |
+| `desktop`      | 1440 × 900                    | El resto de la suite, salvo `@orden-global`                    |
+| `mobile`       | iPhone 13 emulado (390 × 844) | El resto de la suite, salvo `@orden-global`                    |
 
 El `webServer` de Playwright ejecuta `npm run build` y luego `next start -p 3100`, así que la primera ejecución tarda: se prueba contra la compilación de producción, no contra el servidor de desarrollo. Ese `webServer` fija las dos variables `NEXT_PUBLIC_SUPABASE_*` **del stack local**: son `NEXT_PUBLIC_*` y se incrustan en ese `build`, así que sin ellas la suite compilaría contra el proyecto remoto y crearía usuarios de verdad en cada ejecución.
 
 La suite corre con `workers: 2`. Desde que la sesión es real, cada navegación pasa por el stack de Docker —el proxy valida el token y el layout resuelve la sesión—, y con un worker por núcleo Auth agota su pool de conexiones: las peticiones empiezan a morir con 504 sin que nada esté roto.
+
+**Condición de carrera del salón (arreglada en SPEC 28).** Tres tests guardan una puntuación real de la cuenta semilla `PX_KAI` (ARKANOID, ASTEROIDES, BUSCAMINAS); otros asumen que ningún jugador tiene puntuación en ningún juego, o que `PX_KAI` no tiene marca en su pestaña por defecto del salón (siempre ARKANOID: empate de `created_at`, gana el slug). Con `fullyParallel: true` y `workers: 2` no hay garantía de orden entre ellos. El arreglo: los tests que asumen el catálogo vacío llevan `{ tag: "@orden-global" }`, y `desktop`/`mobile` declaran `dependencies: ["orden-global"]` + `grepInvert: /@orden-global/` — así esos tres corren una sola vez, en serie, antes de que arranque el paralelismo habitual, y nunca compiten con los tests que guardan puntuación. Por separado, las pruebas de guardado real de ASTEROIDES y BUSCAMINAS llevan `test.skip(isMobile, …)` (mismo patrón que ya tenía ARKANOID): comparten cuenta y juego entre `desktop` y `mobile`, así que si los dos proyectos jugaran a la vez, el que puntuara menos no superaría la marca que acaba de guardar el otro.
 
 El bloque `registro por correo` registra una cuenta nueva y lee el mensaje de Mailpit por su API (`http://127.0.0.1:54324/api/v1/search`) para seguir el enlace de confirmación. Busca por destinatario y no "el último mensaje": los dos proyectos pueden estar registrando a la vez.
 
@@ -488,6 +491,7 @@ npx skills@latest add Klerith/fernando-skills
 | [25 — SERPIENTE: quinto motor jugable](specs/25-serpiente.md)                                                                               | Aprobado     | SPEC 01, 04, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23 |
 | [26 — Versión 1.0.0 y blog de cambios](specs/26-v1-0-0-y-blog-de-cambios.md)                                                                | Implementado | SPEC 01, SPEC 02                                        |
 | [27 — Consultas redundantes, redirección de invitado y actividad real del home](specs/27-arreglos-rendimiento-invitado-y-actividad-home.md) | Implementado | SPEC 04, 06, 07, 16, 17, 18, 26                         |
+| [28 — Limpieza de la suite de tests y condición de carrera del salón](specs/28-limpieza-tests-y-condicion-de-carrera-salon.md)              | Implementado | SPEC 06, 07, 16, 17, 18, 21, 22, 26, 27                 |
 
 ## Deuda conocida
 
