@@ -23,6 +23,11 @@ import {
   type Shape,
   type TetrisState,
 } from "@/lib/tetris";
+import {
+  createSeededRng,
+  type TetrixActionLog,
+  type TetrixActionType,
+} from "@/lib/tetris-replay";
 
 /** Lado de la celda en píxeles lógicos: el canvas mide 300 × 600. */
 const BLOCK = 30;
@@ -73,6 +78,20 @@ function filledBox(shape: Shape) {
 
 export type TetrisRun = { score: number; lives: number; level: number };
 
+/** Mutador del motor junto al tipo de acción que loguea (SPEC 32). */
+type ActionEntry = {
+  type: TetrixActionType;
+  run: (state: TetrisState) => void;
+};
+
+const ACTIONS = {
+  moveLeft: { type: "move_left", run: (s: TetrisState) => move(s, -1) },
+  moveRight: { type: "move_right", run: (s: TetrisState) => move(s, 1) },
+  rotate: { type: "rotate", run: rotate },
+  softDrop: { type: "soft_drop", run: softDrop },
+  hardDrop: { type: "hard_drop", run: hardDrop },
+} satisfies Record<string, ActionEntry>;
+
 type TetrisGameProps = {
   /** Lo controla el botón PAUSA del HUD. Con true, el bucle no avanza. */
   paused: boolean;
@@ -80,14 +99,20 @@ type TetrisGameProps = {
   onTogglePause: () => void;
   /** El motor empuja aquí score / lives / level cuando cambian. */
   onRun: (run: TetrisRun) => void;
-  /** Top-out: el reproductor abre el modal FIN DEL JUEGO. */
-  onOver: () => void;
+  /**
+   * Top-out: el reproductor abre el modal FIN DEL JUEGO. Lleva el registro
+   * de acciones de la partida (SPEC 32) para que `game-player.tsx` pueda
+   * mandarlo al replay en servidor antes de guardar.
+   */
+  onOver: (log: TetrixActionLog) => void;
   /** Vidas iniciales reales (`games.vidas`). */
   initialLives: number;
   /** Tope de nivel real (`games.niveles`); null = sin tope. */
   maxLevel: number | null;
   /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
   padRef: Ref<PadHandle>;
+  /** Semilla de `start_game_session` (SPEC 32): siembra el mismo generador de piezas que usará el replay. */
+  seed: string;
 };
 
 export function TetrisGame({
@@ -98,6 +123,7 @@ export function TetrisGame({
   initialLives,
   maxLevel,
   padRef,
+  seed,
 }: TetrisGameProps) {
   const boardRef = useRef<HTMLCanvasElement | null>(null);
   const nextRef = useRef<HTMLCanvasElement | null>(null);
@@ -106,7 +132,22 @@ export function TetrisGame({
   // reconciliaría React para pintar en un canvas que React no gestiona.
   const stateRef = useRef<TetrisState | null>(null);
   if (stateRef.current === null)
-    stateRef.current = createState(initialLives, maxLevel);
+    stateRef.current = createState(
+      initialLives,
+      maxLevel,
+      createSeededRng(seed),
+    );
+
+  // Reloj e historial propios de la partida: el replay en servidor (SPEC 32)
+  // reproduce la gravedad a partir de estos mismos deltas de tiempo. El
+  // reloj se arma en un efecto, no durante el render, para no llamar a
+  // `performance.now()` (impuro) en ese paso.
+  const startRef = useRef(0);
+  const logRef = useRef<TetrixActionLog>([]);
+  const prevPausedRef = useRef(paused);
+  useEffect(() => {
+    if (startRef.current === 0) startRef.current = performance.now();
+  }, []);
 
   const colorsRef = useRef<readonly string[]>(PIECE_FALLBACK);
   const gridRef = useRef("rgba(0, 245, 255, 0.18)");
@@ -272,18 +313,35 @@ export function TetrisGame({
     publish();
   }, [draw, publish]);
 
-  /** Aplica una acción del jugador y repinta. */
+  /** Aplica una acción del jugador, la loguea con su timestamp y repinta. */
   const act = useCallback(
-    (action: (state: TetrisState) => void) => {
+    (action: ActionEntry) => {
       const state = stateRef.current;
       if (!state || paused || state.over) return;
-      action(state);
+      action.run(state);
+      logRef.current.push({
+        type: action.type,
+        t: performance.now() - startRef.current,
+      });
       draw();
       publish();
-      if (state.over) onOverRef.current();
+      if (state.over) onOverRef.current(logRef.current);
     },
     [draw, paused, publish],
   );
+
+  // Pausa/reanudación entran en el registro igual que cualquier otra
+  // acción: el replay en servidor ignora el tiempo entre ambas (SPEC 32).
+  // Solo transiciones reales tras montar, nunca el valor inicial.
+  useEffect(() => {
+    if (prevPausedRef.current === paused) return;
+    prevPausedRef.current = paused;
+    if (stateRef.current?.over) return;
+    logRef.current.push({
+      type: paused ? "pause" : "resume",
+      t: performance.now() - startRef.current,
+    });
+  }, [paused]);
 
   // Bucle de caída.
   useEffect(() => {
@@ -308,7 +366,7 @@ export function TetrisGame({
       draw();
       publish();
       if (state.over) {
-        onOverRef.current();
+        onOverRef.current(logRef.current);
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -331,24 +389,24 @@ export function TetrisGame({
       switch (event.code) {
         case "ArrowLeft":
           event.preventDefault();
-          act((s) => move(s, -1));
+          act(ACTIONS.moveLeft);
           break;
         case "ArrowRight":
           event.preventDefault();
-          act((s) => move(s, 1));
+          act(ACTIONS.moveRight);
           break;
         case "ArrowDown":
           event.preventDefault();
-          act(softDrop);
+          act(ACTIONS.softDrop);
           break;
         case "ArrowUp":
         case "KeyX":
           event.preventDefault();
-          act(rotate);
+          act(ACTIONS.rotate);
           break;
         case "Space":
           event.preventDefault();
-          act(hardDrop);
+          act(ACTIONS.hardDrop);
           break;
         default:
           break;
@@ -368,7 +426,7 @@ export function TetrisGame({
 
   /** Pulsación de la cruceta; mover y bajar se repiten mientras se mantiene. */
   const press = useCallback(
-    (action: (state: TetrisState) => void, repeat: boolean) => {
+    (action: ActionEntry, repeat: boolean) => {
       act(action);
       if (!repeat) return;
       stopRepeat();
@@ -388,22 +446,22 @@ export function TetrisGame({
       press: (action: PadAction) => {
         switch (action) {
           case "up":
-            press(rotate, false);
+            press(ACTIONS.rotate, false);
             break;
           case "down":
-            press(softDrop, true);
+            press(ACTIONS.softDrop, true);
             break;
           case "left":
-            press((s) => move(s, -1), true);
+            press(ACTIONS.moveLeft, true);
             break;
           case "right":
-            press((s) => move(s, 1), true);
+            press(ACTIONS.moveRight, true);
             break;
           case "a":
-            press(hardDrop, false);
+            press(ACTIONS.hardDrop, false);
             break;
           case "b":
-            press(rotate, false);
+            press(ACTIONS.rotate, false);
             break;
           default:
             break;
@@ -414,7 +472,7 @@ export function TetrisGame({
     [press, stopRepeat],
   );
 
-  const padProps = (action: (state: TetrisState) => void, repeat: boolean) => ({
+  const padProps = (action: ActionEntry, repeat: boolean) => ({
     type: "button" as const,
     className: "btn",
     onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
@@ -449,28 +507,28 @@ export function TetrisGame({
             <span className="l">MOVIMIENTO</span>
             <div className="tetris-pad">
               <button
-                {...padProps(rotate, false)}
+                {...padProps(ACTIONS.rotate, false)}
                 className="btn pad-rot"
                 aria-label="Rotar la pieza"
               >
                 ↻
               </button>
               <button
-                {...padProps((s) => move(s, -1), true)}
+                {...padProps(ACTIONS.moveLeft, true)}
                 className="btn pad-left"
                 aria-label="Mover a la izquierda"
               >
                 ←
               </button>
               <button
-                {...padProps(softDrop, true)}
+                {...padProps(ACTIONS.softDrop, true)}
                 className="btn pad-down"
                 aria-label="Bajar más rápido"
               >
                 ↓
               </button>
               <button
-                {...padProps((s) => move(s, 1), true)}
+                {...padProps(ACTIONS.moveRight, true)}
                 className="btn pad-right"
                 aria-label="Mover a la derecha"
               >
@@ -481,7 +539,7 @@ export function TetrisGame({
           <div className="tetris-block">
             <span className="l">BAJAR</span>
             <button
-              {...padProps(hardDrop, false)}
+              {...padProps(ACTIONS.hardDrop, false)}
               className="btn magenta pad-drop"
               aria-label="Caída instantánea"
             >

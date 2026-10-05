@@ -30,6 +30,14 @@ export type TetrisState = {
   maxLevel: number | null;
   /** true tras el top-out: el reproductor abre el modal. */
   over: boolean;
+  /**
+   * Generador de números aleatorios para las piezas siguientes. No es parte
+   * del contrato público del motor — existe para que el replay en servidor
+   * (SPEC 32, `lib/tetris-replay.ts`) pueda sembrar exactamente la misma
+   * secuencia de piezas que vio el cliente a lo largo de toda la partida,
+   * no solo en las dos primeras.
+   */
+  rng: () => number;
 };
 
 /** Puntos por 1, 2, 3 o 4 líneas, multiplicados por el nivel. */
@@ -84,8 +92,8 @@ function createBoard(): Cell[][] {
   return Array.from({ length: ROWS }, () => new Array<Cell>(COLS).fill(0));
 }
 
-export function randomPiece(): Piece {
-  const type = 1 + Math.floor(Math.random() * PIECE_COUNT);
+export function randomPiece(rng: () => number = Math.random): Piece {
+  const type = 1 + Math.floor(rng() * PIECE_COUNT);
   const shape = PIECES[type].map((row) => [...row]);
   return {
     type,
@@ -155,18 +163,20 @@ export function ghostY(state: TetrisState): number {
 export function createState(
   lives: number,
   maxLevel: number | null,
+  rng: () => number = Math.random,
 ): TetrisState {
-  const next = randomPiece();
+  const next = randomPiece(rng);
   const state: TetrisState = {
     board: createBoard(),
     current: next,
-    next: randomPiece(),
+    next: randomPiece(rng),
     score: 0,
     lines: 0,
     level: 1,
     lives,
     maxLevel,
     over: false,
+    rng,
   };
   return state;
 }
@@ -204,7 +214,7 @@ function clearLines(state: TetrisState): void {
  */
 function spawn(state: TetrisState): void {
   state.current = state.next;
-  state.next = randomPiece();
+  state.next = randomPiece(state.rng);
   if (
     collide(state.board, state.current.shape, state.current.x, state.current.y)
   ) {

@@ -19,9 +19,10 @@ import { GamePad } from "@/components/game-pad";
 import { SerpienteGame } from "@/components/serpiente-game";
 import { TetrisGame } from "@/components/tetris-game";
 import type { Game } from "@/lib/supabase/games";
-import type { GameSession } from "@/lib/supabase/scores";
+import type { GameSession, ReplayProof } from "@/lib/supabase/scores";
 import { displayName } from "@/lib/supabase/user";
 import { createClient } from "@/lib/supabase/client";
+import type { TetrixActionLog } from "@/lib/tetris-replay";
 
 /**
  * Partida recuperada al volver de /auth. Viaja en la URL (`?puntuacion=`) y la
@@ -69,13 +70,20 @@ export type EngineProps = {
   paused: boolean;
   onTogglePause: () => void;
   onRun: (run: EngineRun) => void;
-  onOver: () => void;
+  /**
+   * El `log` es el registro de acciones de la partida (SPEC 32); solo
+   * TETRIX lo manda, para que el reproductor pueda pedir el replay en
+   * servidor antes de guardar.
+   */
+  onOver: (log?: TetrixActionLog) => void;
   /** Vidas iniciales reales, de `games.vidas` (SPEC 18). */
   initialLives: number;
   /** Tope de nivel real, de `games.niveles`; null = sin tope. Solo TETRIX lo usa. */
   maxLevel: number | null;
   /** El motor publica aquí su PadHandle; el mando de móvil lo pulsa (SPEC 21). */
   padRef: Ref<PadHandle>;
+  /** Semilla de `start_game_session` (SPEC 32); cadena vacía si no hay sesión. Solo TETRIX la usa. */
+  seed: string;
 };
 
 /**
@@ -238,6 +246,11 @@ export function GamePlayer({
   // Al remontar el motor (`runKey`) React reasigna el ref solo.
   const padRef = useRef<PadHandle | null>(null);
 
+  // Registro de acciones de la última partida de TETRIX (SPEC 32); solo
+  // `handleOver` lo escribe y solo `handleSave` lo lee, así que un ref basta
+  // — no necesita disparar un repintado.
+  const tetrixLogRef = useRef<TetrixActionLog | null>(null);
+
   // El panel del tubo y el botón que lo abrió. El botón no se guarda por `ref`
   // porque son dos —el del HUD y la pastilla del mando— y solo uno de los dos
   // se ve en cada viewport: se anota el que tenía el foco al abrir.
@@ -317,7 +330,38 @@ export function GamePlayer({
     if (ignoreRun.current) return;
     setRun(next);
   }, []);
-  const handleOver = useCallback(() => setOver(true), []);
+  const handleOver = useCallback((log?: TetrixActionLog) => {
+    tetrixLogRef.current = log ?? null;
+    setOver(true);
+  }, []);
+
+  /**
+   * Manda el registro de acciones de TETRIX a la ruta de validación para
+   * que el servidor reproduzca la partida (SPEC 32). Vive aquí y no en
+   * `lib/supabase/scores.ts` porque ese módulo importa `@/lib/supabase/
+   * server` (usa `next/headers`), que no puede entrar en el bundle del
+   * cliente.
+   */
+  const validarPartidaTetrix = useCallback(
+    async (
+      slug: string,
+      token: string,
+      log: TetrixActionLog,
+    ): Promise<ReplayProof | null> => {
+      try {
+        const res = await fetch("/api/validar-partida-tetrix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug, token, log }),
+        });
+        if (!res.ok) return null;
+        return (await res.json()) as ReplayProof;
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
 
   /**
    * Guarda de verdad la partida actual. Solo se llama cuando `isRecord` ya es
@@ -334,13 +378,38 @@ export function GamePlayer({
     }
     setSaving(true);
     setSaveError(false);
+
+    // TETRIX no manda su propio score/nivel: el replay en servidor es quien
+    // decide qué se guarda. Sin un registro válido no hay nada que intentar.
+    let proof: string | undefined;
+    let score = run.score;
+    let level = run.level;
+    if (game.requiereReplay) {
+      const replay = tetrixLogRef.current
+        ? await validarPartidaTetrix(
+            game.id,
+            gameSession.token,
+            tetrixLogRef.current,
+          )
+        : null;
+      if (!replay) {
+        setSaving(false);
+        setSaveError(true);
+        return;
+      }
+      score = replay.score;
+      level = replay.level;
+      proof = replay.proof;
+    }
+
     const supabase = createClient();
     const { data, error } = await supabase
       .rpc("save_score", {
         p_slug: game.id,
-        p_score: run.score,
-        p_level: run.level,
+        p_score: score,
+        p_level: level,
         p_token: gameSession.token,
+        p_proof: proof,
       })
       .single();
     setSaving(false);
@@ -349,7 +418,7 @@ export function GamePlayer({
       return;
     }
     if (data.is_new_record) {
-      setBestScore(run.score);
+      setBestScore(score);
       setPreviousBestAtSave(data.previous_best);
       setSaved(true);
     } else {
@@ -357,7 +426,14 @@ export function GamePlayer({
       // manda, y el siguiente render ya pinta solo la rama de "no es récord".
       setBestScore(data.previous_best);
     }
-  }, [game.id, run.score, run.level, gameSession]);
+  }, [
+    game.id,
+    game.requiereReplay,
+    run.score,
+    run.level,
+    gameSession,
+    validarPartidaTetrix,
+  ]);
 
   // La partida recuperada de /auth se autoguarda si es récord; si no lo es,
   // el modal ya pinta esa rama sola con el `bestScore` inicial, sin llamar
@@ -506,6 +582,7 @@ export function GamePlayer({
             onOver={handleOver}
             initialLives={game.vidas}
             maxLevel={game.niveles}
+            seed={gameSession?.seed ?? ""}
             padRef={padRef}
           />
           {/* Cuarta banda del tubo, debajo del juego y del mismo alto que la

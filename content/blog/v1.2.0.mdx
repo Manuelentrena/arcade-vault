@@ -1,0 +1,39 @@
+export const metadata = {
+  title: "Nadie hace trampa en TETRIX: llega la 1.2.0",
+  date: "2026-10-05",
+  version: "1.2.0",
+  bump: "Menor",
+};
+
+# Nadie hace trampa en TETRIX: llega la 1.2.0
+
+Un marcador solo vale algo si es real. Con esta entrada, el de TETRIX lo
+es de una forma distinta a cualquier otro número que verás en la sala: no
+te lo creemos, lo comprobamos.
+
+## TETRIX juega bajo testigo
+
+Cada partida de TETRIX manda ahora al servidor el registro exacto de lo
+que hiciste — cada movimiento, cada giro, cada caída, cada pausa, con su
+instante — y es el propio servidor quien vuelve a jugarla, pieza a
+pieza, con el mismo motor y la misma semilla que usaste tú. La
+puntuación que se guarda en tu historial y en el Salón de la Fama es
+siempre esa, la que recalcula la sala, nunca una cifra que simplemente
+nos digas. Para ti no cambia nada mientras juegas — ni un fotograma, ni
+un control — pero el marcador de arriba a la derecha ya nunca miente.
+
+## También incluye
+
+Desde la última entrada grande, un par de repasos de seguridad viajaban
+calladitos en el casco:
+
+- Cerramos los últimos huecos de un checklist básico de seguridad —
+  contraseñas más fuertes, protección frente a contraseñas filtradas,
+  límite de altas por IP y cabeceras HTTP más estrictas— y dejamos
+  constancia de que el resto ya estaba en orden.
+- Afinamos varios avisos que señaló el panel de seguridad de Supabase:
+  un par de funciones internas quedaron mejor cerradas al público y una
+  pieza de mantenimiento de la base de datos, que ya vivía en producción,
+  por fin quedó documentada en el propio repositorio.
+
+Como siempre, gracias por jugar. Nos vemos en la próxima ficha.
