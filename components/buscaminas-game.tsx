@@ -24,6 +24,8 @@ import {
   toggleFlag,
   type BuscaminasState,
 } from "@/lib/buscaminas";
+import { createSeededRng } from "@/lib/replay-rng";
+import type { BuscaminasActionLog } from "@/lib/buscaminas-replay";
 
 /** Repetición del cursor mientras se mantiene una flecha o la cruceta. */
 const REPEAT_DELAY = 300;
@@ -110,12 +112,14 @@ type BuscaminasGameProps = {
   paused: boolean;
   onTogglePause: () => void;
   onRun: (run: BuscaminasRun) => void;
-  onOver: () => void;
+  onOver: (log: BuscaminasActionLog) => void;
   initialLives: number;
   /** Ignorado: el nivel de BUSCAMINAS no tiene techo (games.niveles = null). */
   maxLevel: number | null;
   /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
   padRef: Ref<PadHandle>;
+  /** Semilla de `start_game_session` (SPEC 34); cadena vacía si no hay sesión. */
+  seed: string;
 };
 
 /**
@@ -193,13 +197,25 @@ export function BuscaminasGame({
   onOver,
   initialLives,
   padRef,
+  seed,
 }: BuscaminasGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // El estado del motor vive en un ref: a 60 fps un setState por fotograma
   // reconciliaría React para pintar en un canvas que React no gestiona.
   const stateRef = useRef<BuscaminasState | null>(null);
-  if (stateRef.current === null) stateRef.current = createState(initialLives);
+  if (stateRef.current === null)
+    stateRef.current = createState(initialLives, createSeededRng(seed));
+
+  // Registro de celdas reveladas/marcadas (SPEC 34): el replay en servidor
+  // reproduce la partida a partir de esto. Solo la celda bajo el cursor en
+  // el instante de la llamada, nunca el camino que siguió para llegar ahí —
+  // `reveal()`/`toggleFlag()` tampoco lo miran.
+  const startRef = useRef(0);
+  const logRef = useRef<BuscaminasActionLog>([]);
+  useEffect(() => {
+    if (startRef.current === 0) startRef.current = performance.now();
+  }, []);
 
   const paletteRef = useRef<Palette>(PALETTE_FALLBACK);
   const lastRunRef = useRef<BuscaminasRun | null>(null);
@@ -348,18 +364,24 @@ export function BuscaminasGame({
     );
   }, []);
 
-  /** Aplica una acción discreta (revelar, bandera) y repinta. */
+  /** Aplica una acción discreta (revelar, bandera), la loguea y repinta. */
   const act = useCallback(
-    (action: (state: BuscaminasState) => void) => {
+    (type: "reveal" | "flag", action: (state: BuscaminasState) => void) => {
       const state = stateRef.current;
       if (!state || paused || state.over) return;
+      logRef.current.push({
+        type,
+        row: state.cursor.row,
+        col: state.cursor.col,
+        t: performance.now() - startRef.current,
+      });
       action(state);
       draw();
       publish();
       // Las banderas y las minas solo cambian aquí: poner o quitar una marca,
       // y el salto de nivel que reparte minas nuevas.
       syncLegend();
-      if (state.over) onOverRef.current();
+      if (state.over) onOverRef.current(logRef.current);
     },
     [draw, paused, publish, syncLegend],
   );
@@ -415,8 +437,24 @@ export function BuscaminasGame({
           repeatAtRef.current[code] = ts + REPEAT_RATE;
         }
       }
-      if (pressed("Space")) reveal(state);
-      if (pressed("KeyF")) toggleFlag(state);
+      if (pressed("Space")) {
+        logRef.current.push({
+          type: "reveal",
+          row: state.cursor.row,
+          col: state.cursor.col,
+          t: ts - startRef.current,
+        });
+        reveal(state);
+      }
+      if (pressed("KeyF")) {
+        logRef.current.push({
+          type: "flag",
+          row: state.cursor.row,
+          col: state.cursor.col,
+          t: ts - startRef.current,
+        });
+        toggleFlag(state);
+      }
       // Segundo camino de entrada, aparte de `act()`: por aquí llegan el
       // teclado, la cruceta de dentro del tubo y el mando de móvil. `act()`
       // sincroniza la leyenda tras el ratón; sin esta llamada, revelar o
@@ -427,7 +465,7 @@ export function BuscaminasGame({
       draw();
       publish();
       if (state.over) {
-        onOverRef.current();
+        onOverRef.current(logRef.current);
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -550,8 +588,8 @@ export function BuscaminasGame({
       const cell = cellFromEvent(event);
       if (!cell) return;
       setCursor(state, cell.row, cell.col);
-      if (event.button === 2) act(toggleFlag);
-      else if (event.button === 0) act(reveal);
+      if (event.button === 2) act("flag", toggleFlag);
+      else if (event.button === 0) act("reveal", reveal);
     },
     [act, cellFromEvent, paused],
   );

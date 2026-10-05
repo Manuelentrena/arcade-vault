@@ -51,6 +51,8 @@ export type BuscaminasState = {
   level: number;
   /** true tras revelar una mina: el reproductor abre el modal. */
   over: boolean;
+  /** PRNG de `placeMines()` (SPEC 34); `Math.random` por defecto. */
+  rng: () => number;
 };
 
 /** Minas de un nivel dado: 10 en el nivel 1, +1 por nivel, tope en 60. */
@@ -94,7 +96,10 @@ function freshGrid(state: BuscaminasState): void {
   state.firstReveal = true;
 }
 
-export function createState(lives: number): BuscaminasState {
+export function createState(
+  lives: number,
+  rng: () => number = Math.random,
+): BuscaminasState {
   const state: BuscaminasState = {
     board: makeBoard(),
     cursor: { row: 6, col: 8 },
@@ -106,6 +111,7 @@ export function createState(lives: number): BuscaminasState {
     lives,
     level: 1,
     over: false,
+    rng,
   };
   return state;
 }
@@ -150,8 +156,8 @@ function placeMines(
 
   let placed = 0;
   while (placed < state.mines) {
-    const r = Math.floor(Math.random() * ROWS);
-    const c = Math.floor(Math.random() * COLS);
+    const r = Math.floor(state.rng() * ROWS);
+    const c = Math.floor(state.rng() * COLS);
     if (safe.has(`${r},${c}`)) continue;
     if (state.board[r][c].mine) continue;
     state.board[r][c].mine = true;
