@@ -31,6 +31,7 @@ import {
   replayAsteroides,
   type AsteroidsActionLog,
 } from "../lib/asteroids-replay";
+import { replayArkanoid, type ArkanoidActionLog } from "../lib/arkanoid-replay";
 import {
   createState as createBuscaminasState,
   reveal as revealCell,
@@ -2390,6 +2391,37 @@ test.describe("ASTEROIDES — motor de replay (módulo puro)", () => {
 
     const result = replayAsteroides(log, seed, 1);
     expect(result.over).toBe(true);
+  });
+});
+
+test.describe("ARKANOID — motor de replay (módulo puro)", () => {
+  test("misma semilla y mismo log de teclado siempre dan el mismo resultado", () => {
+    const seed = "deadbeefcafebabe0011223344556677";
+    const log: ArkanoidActionLog = [
+      { type: "serve", t: 0 },
+      { type: "left_down", t: 50 },
+      { type: "left_up", t: 300 },
+      { type: "right_down", t: 320 },
+      { type: "right_up", t: 500 },
+    ];
+
+    const a = replayArkanoid(log, seed, 3);
+    const b = replayArkanoid(log, seed, 3);
+    expect(a).toEqual(b);
+  });
+
+  test("misma semilla y mismo log con muestras de paddle_x siempre dan el mismo resultado", () => {
+    const seed = "00000001";
+    const log: ArkanoidActionLog = [
+      { type: "paddle_x", x: 400, t: 0 },
+      { type: "serve", t: 10 },
+      { type: "paddle_x", x: 250, t: 200 },
+      { type: "paddle_x", x: 550, t: 900 },
+    ];
+
+    const a = replayArkanoid(log, seed, 3);
+    const b = replayArkanoid(log, seed, 3);
+    expect(a).toEqual(b);
   });
 });
 

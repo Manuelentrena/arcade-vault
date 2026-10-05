@@ -134,6 +134,8 @@ export type ArkanoidState = {
   serves: number;
   /** true cuando se pierde la última vida: el reproductor abre el modal. */
   over: boolean;
+  /** Sorteo de si un ladrillo roto suelta premio (SPEC 36); seedeable para el replay en servidor. */
+  rng: () => number;
 };
 
 function clamp(v: number, min: number, max: number): number {
@@ -313,7 +315,10 @@ function applyPaddleWidth(state: ArkanoidState): void {
   paddle.x = clamp(cx - paddle.w / 2, 0, WIDTH - paddle.w);
 }
 
-export function createState(lives: number): ArkanoidState {
+export function createState(
+  lives: number,
+  rng: () => number = Math.random,
+): ArkanoidState {
   const state: ArkanoidState = {
     paddle: {
       x: (WIDTH - PADDLE_W) / 2,
@@ -332,6 +337,7 @@ export function createState(lives: number): ArkanoidState {
     lives,
     serves: 0,
     over: false,
+    rng,
   };
   const ball = createBall();
   stickBall(state, ball);
@@ -444,7 +450,7 @@ function maybeDropFrom(state: ArkanoidState, brick: Brick): void {
   if (!state.droppedThisLevel.paddle) kinds.push("paddle");
 
   for (const kind of kinds) {
-    if (Math.random() >= DROP_CHANCE) continue;
+    if (state.rng() >= DROP_CHANCE) continue;
     state.drops.push({
       x: brick.x + brick.w / 2 - DROP_SIZE / 2,
       y: brick.y + brick.h / 2 - DROP_SIZE / 2,

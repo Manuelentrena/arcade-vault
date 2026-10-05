@@ -526,6 +526,7 @@ npx skills@latest add Klerith/fernando-skills
 | [33 — Replay en servidor para SERPIENTE](specs/33-replay-servidor-serpiente.md)                                                             | Implementado | SPEC 25, SPEC 29, SPEC 32                               |
 | [34 — Replay en servidor para BUSCAMINAS](specs/34-replay-servidor-buscaminas.md)                                                           | Implementado | SPEC 20, SPEC 29, SPEC 32, SPEC 33                      |
 | [35 — Replay en servidor para ASTEROIDES](specs/35-replay-servidor-asteroides.md)                                                           | Implementado | SPEC 14, SPEC 29, SPEC 32, SPEC 33                      |
+| [36 — Replay en servidor para ARKANOID](specs/36-replay-servidor-arkanoid.md)                                                               | Implementado | SPEC 15, SPEC 24, SPEC 29, SPEC 32, SPEC 33, SPEC 35    |
 
 ## Deuda conocida
 

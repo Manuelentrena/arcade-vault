@@ -22,6 +22,8 @@ import {
   step,
   type ArkanoidState,
 } from "@/lib/arkanoid";
+import { createSeededRng } from "@/lib/replay-rng";
+import type { ArkanoidActionLog } from "@/lib/arkanoid-replay";
 
 /** Tokens de `:root`; el CSS es la única fuente de verdad de la paleta. */
 const BRICK_VARS = [
@@ -51,6 +53,16 @@ const BURST_GROWTH = 0.4;
 /** Tope de `dt` por fotograma: volver de una pestaña en segundo plano no salta. */
 const MAX_DT = 0.05;
 
+/**
+ * Umbral de muestreo del arrastre de la pala en el registro de replay
+ * (SPEC 36): una muestra nueva entra al log solo si ha pasado al menos este
+ * tiempo desde la última, o si la x cambió más de SAMPLE_PX, lo que ocurra
+ * primero. El arrastre en sí no se limita — sigue siendo `setPaddleX()` en
+ * cada `pointermove` — solo lo que se registra para el replay.
+ */
+const SAMPLE_MS = 1000 / 30;
+const SAMPLE_PX = 2;
+
 export type ArkanoidRun = { score: number; lives: number; level: number };
 
 type ArkanoidGameProps = {
@@ -60,14 +72,20 @@ type ArkanoidGameProps = {
   onTogglePause: () => void;
   /** El motor empuja aquí score / lives / level cuando cambian. */
   onRun: (run: ArkanoidRun) => void;
-  /** Última bola perdida: el reproductor abre el modal FIN DEL JUEGO. */
-  onOver: () => void;
+  /**
+   * Última bola perdida: el reproductor abre el modal FIN DEL JUEGO. Lleva el
+   * registro de la partida (SPEC 36) para que `game-player.tsx` pueda
+   * mandarlo al replay en servidor antes de guardar.
+   */
+  onOver: (log: ArkanoidActionLog) => void;
   /** Vidas iniciales reales (`games.vidas`). */
   initialLives: number;
   /** Tope de nivel real (`games.niveles`); ARKANOID no lo usa (sin tope). */
   maxLevel: number | null;
   /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
   padRef: Ref<PadHandle>;
+  /** Semilla de `start_game_session` (SPEC 36): siembra el mismo generador que usará el replay. */
+  seed: string;
 };
 
 export function ArkanoidGame({
@@ -77,13 +95,15 @@ export function ArkanoidGame({
   onOver,
   initialLives,
   padRef,
+  seed,
 }: ArkanoidGameProps) {
   const boardRef = useRef<HTMLCanvasElement | null>(null);
 
   // El estado del motor vive en un ref: a 60 fps un setState por fotograma
   // reconciliaría React para pintar en un canvas que React no gestiona.
   const stateRef = useRef<ArkanoidState | null>(null);
-  if (stateRef.current === null) stateRef.current = createState(initialLives);
+  if (stateRef.current === null)
+    stateRef.current = createState(initialLives, createSeededRng(seed));
 
   const colorsRef = useRef<readonly string[]>(BRICK_FALLBACK);
   const inkRef = useRef("#e8f0ff");
@@ -99,6 +119,17 @@ export function ArkanoidGame({
    * fotograma en vez de repetir con un `setInterval`.
    */
   const heldRef = useRef({ left: false, right: false });
+
+  // Tiempo de juego acumulado, recortado por fotograma igual que `dt`: el
+  // replay en servidor (SPEC 36) reproduce la física a partir de estos
+  // mismos instantes.
+  const gameTimeRef = useRef(0);
+  const logRef = useRef<ArkanoidActionLog>([]);
+  const prevPausedRef = useRef(paused);
+  // Última muestra de arrastre que entró en el log, para el umbral de
+  // cambio/frecuencia (SPEC 36). `null` fuerza que la primera muestra entre
+  // siempre.
+  const lastSampleRef = useRef<{ t: number; x: number } | null>(null);
 
   // Callbacks en refs para que el bucle no se reinicie cuando el padre repinta.
   const onRunRef = useRef(onRun);
@@ -280,6 +311,7 @@ export function ArkanoidGame({
     const loop = (ts: number) => {
       const dt = Math.min(MAX_DT, (ts - last) / 1000);
       last = ts;
+      gameTimeRef.current += dt * 1000;
 
       const held = heldRef.current;
       if (held.left !== held.right) movePaddle(state, held.left ? -1 : 1, dt);
@@ -288,7 +320,7 @@ export function ArkanoidGame({
       draw();
       publish();
       if (state.over) {
-        onOverRef.current();
+        onOverRef.current(logRef.current);
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -297,6 +329,60 @@ export function ArkanoidGame({
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [draw, paused, publish]);
+
+  // Con la pausa se sueltan las teclas: reanudar no debe arrastrar una
+  // dirección que el jugador ya no mantiene.
+  useEffect(() => {
+    if (paused) heldRef.current = { left: false, right: false };
+  }, [paused]);
+
+  // Pausa/reanudación entran en el registro igual que cualquier cambio de
+  // entrada: el replay en servidor (SPEC 36) ignora el tiempo entre ambas.
+  // Solo transiciones reales tras montar, nunca el valor inicial.
+  useEffect(() => {
+    if (prevPausedRef.current === paused) return;
+    prevPausedRef.current = paused;
+    if (stateRef.current?.over) return;
+    logRef.current.push({
+      type: paused ? "pause" : "resume",
+      t: gameTimeRef.current,
+    });
+  }, [paused]);
+
+  /**
+   * Único punto donde `heldRef.current[dir]` cambia, lo use el teclado, los
+   * botones del tubo o el `PadHandle` del mando (SPEC 21): por eso es también
+   * el único punto donde el registro de la partida (SPEC 36) crece para el
+   * teclado, sin duplicar una entrada cuando el valor no cambia de verdad.
+   */
+  const setHeld = useCallback(
+    (dir: "left" | "right", value: boolean) => {
+      const state = stateRef.current;
+      if (value && (!state || paused || state.over)) return;
+      if (heldRef.current[dir] === value) return;
+      heldRef.current[dir] = value;
+      logRef.current.push({
+        type:
+          dir === "left"
+            ? value
+              ? "left_down"
+              : "left_up"
+            : value
+              ? "right_down"
+              : "right_up",
+        t: gameTimeRef.current,
+      });
+    },
+    [paused],
+  );
+
+  /** Único punto donde se llama a `serve(state)`: registra el saque antes. */
+  const doServe = useCallback(() => {
+    const state = stateRef.current;
+    if (!state || paused || state.over) return;
+    logRef.current.push({ type: "serve", t: gameTimeRef.current });
+    serve(state);
+  }, [paused]);
 
   // Teclado: la pala se mueve mientras se mantiene, así que se guardan las
   // teclas pulsadas y las lee el bucle.
@@ -312,16 +398,16 @@ export function ArkanoidGame({
       switch (event.code) {
         case "ArrowLeft":
           event.preventDefault();
-          heldRef.current.left = true;
+          setHeld("left", true);
           break;
         case "ArrowRight":
           event.preventDefault();
-          heldRef.current.right = true;
+          setHeld("right", true);
           break;
         case "Space":
           // Sin preventDefault la página se desplaza.
           event.preventDefault();
-          serve(state);
+          doServe();
           break;
         default:
           break;
@@ -329,8 +415,8 @@ export function ArkanoidGame({
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code === "ArrowLeft") heldRef.current.left = false;
-      if (event.code === "ArrowRight") heldRef.current.right = false;
+      if (event.code === "ArrowLeft") setHeld("left", false);
+      if (event.code === "ArrowRight") setHeld("right", false);
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -339,13 +425,7 @@ export function ArkanoidGame({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [paused]);
-
-  // Con la pausa se sueltan las teclas: reanudar no debe arrastrar una
-  // dirección que el jugador ya no mantiene.
-  useEffect(() => {
-    if (paused) heldRef.current = { left: false, right: false };
-  }, [paused]);
+  }, [doServe, paused, setHeld]);
 
   /** Convierte la x del puntero a espacio lógico y coloca la pala. */
   const aim = useCallback(
@@ -355,8 +435,22 @@ export function ArkanoidGame({
       if (!state || !canvas || paused || state.over) return;
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0) return;
-      setPaddleX(state, ((event.clientX - rect.left) / rect.width) * WIDTH);
+      const x = ((event.clientX - rect.left) / rect.width) * WIDTH;
+      setPaddleX(state, x);
       draw();
+
+      // Umbral de muestreo del registro (SPEC 36): el arrastre en sí no se
+      // limita, solo lo que entra en el log para el replay.
+      const now = gameTimeRef.current;
+      const last = lastSampleRef.current;
+      if (
+        !last ||
+        now - last.t >= SAMPLE_MS ||
+        Math.abs(x - last.x) > SAMPLE_PX
+      ) {
+        lastSampleRef.current = { t: now, x };
+        logRef.current.push({ type: "paddle_x", x, t: now });
+      }
     },
     [draw, paused],
   );
@@ -368,14 +462,14 @@ export function ArkanoidGame({
       event.currentTarget.setPointerCapture(event.pointerId);
       aim(event);
       // Tocar el tablero con la bola en la pala también lanza.
-      serve(state);
+      doServe();
     },
-    [aim, paused],
+    [aim, doServe, paused],
   );
 
   /**
    * El mando de móvil (SPEC 21) escribe el mismo `heldRef` que los botones de
-   * dentro del tubo y llama al mismo `serve(state)` que LANZAR. `up`, `down` y
+   * dentro del tubo y llama al mismo `doServe()` que LANZAR. `up`, `down` y
    * `b` no existen en ARKANOID: el mando los pinta apagados.
    */
   useImperativeHandle(
@@ -383,21 +477,19 @@ export function ArkanoidGame({
     () => ({
       press: (action: PadAction) => {
         if (action === "left" || action === "right") {
-          heldRef.current[action] = true;
+          setHeld(action, true);
           return;
         }
         if (action !== "a") return;
-        const state = stateRef.current;
-        if (!state || paused || state.over) return;
-        serve(state);
+        doServe();
       },
       release: (action: PadAction) => {
         if (action === "left" || action === "right") {
-          heldRef.current[action] = false;
+          setHeld(action, false);
         }
       },
     }),
-    [paused],
+    [doServe, setHeld],
   );
 
   /** Los dos botones de dirección se mantienen pulsados, como las flechas. */
@@ -406,16 +498,16 @@ export function ArkanoidGame({
     className: "btn",
     onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
-      heldRef.current[side] = true;
+      setHeld(side, true);
     },
     onPointerUp: () => {
-      heldRef.current[side] = false;
+      setHeld(side, false);
     },
     onPointerCancel: () => {
-      heldRef.current[side] = false;
+      setHeld(side, false);
     },
     onPointerLeave: () => {
-      heldRef.current[side] = false;
+      setHeld(side, false);
     },
   });
 
@@ -454,9 +546,7 @@ export function ArkanoidGame({
             aria-label="Lanzar la bola"
             onPointerDown={(event) => {
               event.preventDefault();
-              const state = stateRef.current;
-              if (!state || paused || state.over) return;
-              serve(state);
+              doServe();
             }}
           >
             LANZAR

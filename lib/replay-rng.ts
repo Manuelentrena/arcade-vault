@@ -5,6 +5,14 @@
  * para reproducir — da igual qué motor sea, el generador es el mismo.
  */
 
+/**
+ * Paso fijo del replay para los motores con física continua (SPEC 35,
+ * SPEC 36): fino de sobra frente al MAX_DT de 50 ms del cliente. Compartido
+ * por `lib/asteroids-replay.ts` y `lib/arkanoid-replay.ts` para no mantener
+ * la misma constante en dos sitios.
+ */
+export const FIXED_DT = 1 / 120;
+
 /** mulberry32: PRNG determinista y seedable a partir de un entero de 32 bits. */
 export function mulberry32(seed: number): () => number {
   let a = seed;
