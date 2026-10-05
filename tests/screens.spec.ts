@@ -18,6 +18,7 @@ import {
   step as pasoSerpiente,
   tickMs,
 } from "../lib/serpiente";
+import { replayTetrix, type TetrixActionLog } from "../lib/tetris-replay";
 
 const ROUTES = [
   { name: "home", path: "/" },
@@ -1934,6 +1935,84 @@ test.describe("serpiente — motor (módulo puro)", () => {
     expect(s.started).toBe(false);
     expect(s.dirQueue).toHaveLength(0);
     expect(JSON.stringify(s.snake)).toBe(antes);
+  });
+});
+
+/**
+ * SPEC 32 — el replay en servidor de TETRIX, sobre el módulo puro y sin
+ * navegador, siguiendo el mismo precedente que `arkanoid — motor de premios
+ * y multibola` y `serpiente — motor`. `replayTetrix()` es la pieza que hace
+ * que el score guardado en `scores` para TETRIX ya no sea el que afirma el
+ * cliente, así que lo que importa probar aquí es exactamente eso: misma
+ * semilla y mismo log siempre dan el mismo resultado, y el tiempo real
+ * entre acciones —no un contador de ticks— es lo que mueve la gravedad,
+ * salvo el tramo entre una pausa y su reanudación, que no cuenta.
+ */
+test.describe("TETRIX — motor de replay (módulo puro)", () => {
+  test("misma semilla y mismo log siempre dan el mismo resultado", () => {
+    const seed = "deadbeefcafebabe0011223344556677";
+    const log: TetrixActionLog = [
+      { type: "move_left", t: 0 },
+      { type: "rotate", t: 50 },
+      { type: "soft_drop", t: 120 },
+      { type: "hard_drop", t: 400 },
+    ];
+
+    const a = replayTetrix(log, seed, 5, 10);
+    const b = replayTetrix(log, seed, 5, 10);
+    expect(a).toEqual(b);
+  });
+
+  test("la gravedad se deriva del tiempo real entre acciones, no de un contador fijo", () => {
+    const seed = "00000001";
+    // Dos huecos de 10 ms entre el mismo par de acciones: ninguno da tiempo
+    // a un solo `tick()` de gravedad al nivel 1 (1000 ms de intervalo).
+    const quick = replayTetrix(
+      [
+        { type: "hard_drop", t: 0 },
+        { type: "hard_drop", t: 10 },
+      ],
+      seed,
+      5,
+      null,
+    );
+    // El mismo par de acciones, pero con un minuto real entre ellas: de
+    // sobra para que la gravedad haga caer y encajar piezas de más antes
+    // del segundo `hard_drop`. El resultado tiene que notarlo.
+    const slow = replayTetrix(
+      [
+        { type: "hard_drop", t: 0 },
+        { type: "hard_drop", t: 60000 },
+      ],
+      seed,
+      5,
+      null,
+    );
+    expect(slow).not.toEqual(quick);
+  });
+
+  test("el tiempo entre una pausa y su reanudación no cuenta para la gravedad", () => {
+    const seed = "0000000a";
+    // Diez minutos de pausa entre el primer y el segundo `hard_drop`...
+    const withPause: TetrixActionLog = [
+      { type: "hard_drop", t: 0 },
+      { type: "pause", t: 100 },
+      { type: "resume", t: 600000 },
+      { type: "hard_drop", t: 600100 },
+    ];
+    // ...tiene que dar exactamente el mismo resultado que una pausa breve:
+    // el acumulador se reinicia en cada reanudación, así que lo único que
+    // cuenta es el hueco corto entre `resume` y la siguiente acción.
+    const withoutPause: TetrixActionLog = [
+      { type: "hard_drop", t: 0 },
+      { type: "pause", t: 100 },
+      { type: "resume", t: 200 },
+      { type: "hard_drop", t: 300 },
+    ];
+
+    const a = replayTetrix(withPause, seed, 5, null);
+    const b = replayTetrix(withoutPause, seed, 5, null);
+    expect(a).toEqual(b);
   });
 });
 

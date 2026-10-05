@@ -64,6 +64,7 @@ export type Database = {
           nombre: string;
           perifericos: string[];
           plays: number;
+          requiere_replay: boolean;
           short: string;
           slug: string;
           vidas: number;
@@ -82,6 +83,7 @@ export type Database = {
           nombre: string;
           perifericos: string[];
           plays?: number;
+          requiere_replay?: boolean;
           short: string;
           slug: string;
           vidas: number;
@@ -100,6 +102,7 @@ export type Database = {
           nombre?: string;
           perifericos?: string[];
           plays?: number;
+          requiere_replay?: boolean;
           short?: string;
           slug?: string;
           vidas?: number;
@@ -207,6 +210,10 @@ export type Database = {
     };
     Functions: {
       increment_game_plays: { Args: { p_slug: string }; Returns: undefined };
+      issue_score_proof: {
+        Args: { p_level: number; p_score: number; p_token: string };
+        Returns: string;
+      };
       purge_guests_tick: {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
@@ -214,6 +221,7 @@ export type Database = {
       save_score: {
         Args: {
           p_level: number;
+          p_proof?: string;
           p_score: number;
           p_slug: string;
           p_token: string;
@@ -231,7 +239,16 @@ export type Database = {
         Args: { p_slug: string };
         Returns: {
           expires_at: string;
+          seed: string;
           token: string;
+        }[];
+      };
+      verify_game_session: {
+        Args: { p_token: string };
+        Returns: {
+          gid: string;
+          seed: string;
+          uid: string;
         }[];
       };
     };

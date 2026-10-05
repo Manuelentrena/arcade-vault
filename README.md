@@ -522,6 +522,7 @@ npx skills@latest add Klerith/fernando-skills
 | [29 — RLS en `scores` y token de sesión de partida](specs/29-rls-scores-y-token-de-sesion.md)                                               | Implementado | SPEC 06, 07, 08, 16, 17, 18, 26                         |
 | [30 — Checklist básico de seguridad](specs/30-checklist-seguridad-basica.md)                                                                | Implementado | SPEC 16, SPEC 29                                        |
 | [31 — Cierre de warnings del Advisor de seguridad de Supabase](specs/31-cierre-warnings-advisor-supabase.md)                                | Implementado | SPEC 08, SPEC 16, SPEC 29, SPEC 30                      |
+| [32 — Replay en servidor para TETRIX](specs/32-replay-servidor-tetrix.md)                                                                   | Implementado | SPEC 13, SPEC 18, SPEC 29                               |
 
 ## Deuda conocida
 

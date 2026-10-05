@@ -41,8 +41,12 @@ function relativeTime(iso: string): string {
   return `hace ${days} d`;
 }
 
-/** Token firmado por `start_game_session` (SPEC 29) y su caducidad ISO 8601. */
-export type GameSession = { token: string; expiresAt: string };
+/**
+ * Token firmado por `start_game_session` (SPEC 29), su caducidad ISO 8601 y
+ * la semilla de piezas (SPEC 32) que siembra el PRNG de TETRIX — presente
+ * para los cinco juegos, aunque solo TETRIX la usa.
+ */
+export type GameSession = { token: string; expiresAt: string; seed: string };
 
 /**
  * Pide al servidor el token que certifica una carga reciente de /jugar/[id]
@@ -60,8 +64,23 @@ export async function startGameSession(
     .single();
 
   if (error || !data) return null;
-  return { token: data.token, expiresAt: data.expires_at };
+  return { token: data.token, expiresAt: data.expires_at, seed: data.seed };
 }
+
+/**
+ * Resultado de un replay en servidor validado (SPEC 32): el score/nivel
+ * que calculó `lib/tetris-replay.ts` para ese registro de acciones, y la
+ * prueba firmada que `save_score` exige cuando `games.requiere_replay` es
+ * `true`.
+ *
+ * Solo el tipo vive aquí, no `validarPartidaTetrix()` en sí: este módulo
+ * importa `@/lib/supabase/server` (usa `next/headers`), así que una
+ * función de verdad aquí arrastraría ese import al bundle del cliente la
+ * primera vez que `components/game-player.tsx` (`"use client"`) la
+ * llamara en tiempo de ejecución. La función vive en el propio
+ * `game-player.tsx`, que es su único consumidor.
+ */
+export type ReplayProof = { score: number; level: number; proof: string };
 
 /** `scores.game_id` es el uuid interno de `games`; las páginas solo conocen el slug. */
 async function gameIdForSlug(slug: string): Promise<string | null> {

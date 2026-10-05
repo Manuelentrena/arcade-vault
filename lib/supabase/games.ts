@@ -30,10 +30,12 @@ export type Game = {
   vidas: number;
   /** Tope de nivel real del motor; null = sin tope. */
   niveles: number | null;
+  /** Si `save_score` exige una prueba de replay en servidor (SPEC 32). Solo TETRIX, por ahora. */
+  requiereReplay: boolean;
 };
 
 const GAME_COLUMNS =
-  "id, slug, nombre, cover, image, color, short, long, plays, dificultad, jugadores, perifericos, vidas, niveles, categorias(nombre)";
+  "id, slug, nombre, cover, image, color, short, long, plays, dificultad, jugadores, perifericos, vidas, niveles, requiere_replay, categorias(nombre)";
 
 function toGame(
   row: {
@@ -51,6 +53,7 @@ function toGame(
     perifericos: string[];
     vidas: number;
     niveles: number | null;
+    requiere_replay: boolean;
     categorias: { nombre: string } | null;
   },
   best: number | null,
@@ -71,6 +74,7 @@ function toGame(
     perifericos: row.perifericos,
     vidas: row.vidas,
     niveles: row.niveles,
+    requiereReplay: row.requiere_replay,
   };
 }
 
