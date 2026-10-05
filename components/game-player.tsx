@@ -26,6 +26,7 @@ import type { TetrixActionLog } from "@/lib/tetris-replay";
 import type { SerpienteActionLog } from "@/lib/serpiente-replay";
 import type { BuscaminasActionLog } from "@/lib/buscaminas-replay";
 import type { AsteroidsActionLog } from "@/lib/asteroids-replay";
+import type { ArkanoidActionLog } from "@/lib/arkanoid-replay";
 
 /**
  * Partida recuperada al volver de /auth. Viaja en la URL (`?puntuacion=`) y la
@@ -83,7 +84,8 @@ export type EngineProps = {
       | TetrixActionLog
       | SerpienteActionLog
       | BuscaminasActionLog
-      | AsteroidsActionLog,
+      | AsteroidsActionLog
+      | ArkanoidActionLog,
   ) => void;
   /** Vidas iniciales reales, de `games.vidas` (SPEC 18). */
   initialLives: number;
@@ -263,6 +265,7 @@ export function GamePlayer({
     | SerpienteActionLog
     | BuscaminasActionLog
     | AsteroidsActionLog
+    | ArkanoidActionLog
     | null
   >(null);
 
@@ -351,7 +354,8 @@ export function GamePlayer({
         | TetrixActionLog
         | SerpienteActionLog
         | BuscaminasActionLog
-        | AsteroidsActionLog,
+        | AsteroidsActionLog
+        | ArkanoidActionLog,
     ) => {
       actionLogRef.current = log ?? null;
       setOver(true);
@@ -374,7 +378,8 @@ export function GamePlayer({
         | TetrixActionLog
         | SerpienteActionLog
         | BuscaminasActionLog
-        | AsteroidsActionLog,
+        | AsteroidsActionLog
+        | ArkanoidActionLog,
     ): Promise<ReplayProof | null> => {
       try {
         const res = await fetch(`/api/validar-partida-${slug}`, {

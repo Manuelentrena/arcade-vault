@@ -25,7 +25,7 @@
  */
 
 import { createState, step, type Input } from "@/lib/asteroids";
-import { createSeededRng } from "@/lib/replay-rng";
+import { FIXED_DT, createSeededRng } from "@/lib/replay-rng";
 
 export type AsteroidsActionType =
   | "left_down"
@@ -53,8 +53,6 @@ export type ReplayResult = {
   over: boolean;
 };
 
-/** Paso fijo del replay: fino de sobra frente al MAX_DT de 50 ms del cliente. */
-const FIXED_DT = 1 / 120;
 const FIXED_DT_MS = FIXED_DT * 1000;
 
 /** Mismo tope que `app/api/validar-partida-asteroides/route.ts`: ninguna partida simula más de esto. */
