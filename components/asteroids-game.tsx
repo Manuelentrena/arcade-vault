@@ -20,6 +20,11 @@ import {
   type AsteroidsState,
   type Input,
 } from "@/lib/asteroids";
+import { createSeededRng } from "@/lib/replay-rng";
+import type {
+  AsteroidsActionLog,
+  AsteroidsActionType,
+} from "@/lib/asteroids-replay";
 
 /** Las ocho tintas del juego, una por elemento. */
 type Palette = {
@@ -66,14 +71,20 @@ type AsteroidsGameProps = {
   onTogglePause: () => void;
   /** El motor empuja aquí score / lives / level cuando cambian. */
   onRun: (run: AsteroidsRun) => void;
-  /** Choque sin escudo: el reproductor abre el modal FIN DEL JUEGO. */
-  onOver: () => void;
+  /**
+   * Choque sin escudo: el reproductor abre el modal FIN DEL JUEGO. Lleva el
+   * registro de pulsaciones/sueltas de la partida (SPEC 35) para que
+   * `game-player.tsx` pueda mandarlo al replay en servidor antes de guardar.
+   */
+  onOver: (log: AsteroidsActionLog) => void;
   /** Vidas iniciales reales (`games.vidas`). */
   initialLives: number;
   /** Tope de nivel real (`games.niveles`); ASTEROIDES no lo usa (sin tope). */
   maxLevel: number | null;
   /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
   padRef: Ref<PadHandle>;
+  /** Semilla de `start_game_session` (SPEC 35): siembra el mismo generador que usará el replay. */
+  seed: string;
 };
 
 /**
@@ -167,17 +178,27 @@ export function AsteroidsGame({
   onOver,
   initialLives,
   padRef,
+  seed,
 }: AsteroidsGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // El estado del motor vive en un ref: a 60 fps un setState por fotograma
   // reconciliaría React para pintar en un lienzo que React no gestiona.
   const stateRef = useRef<AsteroidsState | null>(null);
-  if (stateRef.current === null) stateRef.current = createState(initialLives);
+  if (stateRef.current === null)
+    stateRef.current = createState(initialLives, createSeededRng(seed));
 
   // Teclado y mandos escriben en el mismo objeto: el motor no sabe de dónde
   // viene cada bandera.
   const inputRef = useRef<Input>(idleInput());
+  // Tiempo de juego acumulado, recortado por fotograma igual que `dt`: el
+  // replay en servidor (SPEC 35) reproduce la física a partir de estos
+  // mismos instantes, así que un tirón real sin recortar movería la física
+  // de más en el replay sin que el jugador lo hubiera visto nunca — el
+  // mismo caso real que ya corrigió `components/serpiente-game.tsx`.
+  const gameTimeRef = useRef(0);
+  const logRef = useRef<AsteroidsActionLog>([]);
+  const prevPausedRef = useRef(paused);
   const paletteRef = useRef<Palette>(ROCK_FALLBACK);
   const lastRunRef = useRef<AsteroidsRun | null>(null);
 
@@ -382,11 +403,12 @@ export function AsteroidsGame({
     const loop = (ts: number) => {
       const dt = Math.min((ts - last) / 1000, MAX_DT);
       last = ts;
+      gameTimeRef.current += dt * 1000;
       step(state, inputRef.current, dt);
       draw();
       publish();
       if (state.over) {
-        onOverRef.current();
+        onOverRef.current(logRef.current);
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -402,6 +424,39 @@ export function AsteroidsGame({
     inputRef.current = idleInput();
   }, [paused]);
   useEffect(() => () => void (inputRef.current = idleInput()), []);
+
+  // Pausa/reanudación entran en el registro igual que cualquier cambio de
+  // bandera: el replay en servidor (SPEC 35) ignora el tiempo entre ambas.
+  // Solo transiciones reales tras montar, nunca el valor inicial.
+  useEffect(() => {
+    if (prevPausedRef.current === paused) return;
+    prevPausedRef.current = paused;
+    if (stateRef.current?.over) return;
+    logRef.current.push({
+      type: paused ? "pause" : "resume",
+      t: gameTimeRef.current,
+    });
+  }, [paused]);
+
+  /**
+   * Único punto donde `inputRef.current[flag]` cambia, lo use el teclado o el
+   * `PadHandle` del mando (SPEC 21): por eso es también el único punto donde
+   * el registro de la partida (SPEC 35) crece, sin duplicar una entrada
+   * cuando el valor no cambia de verdad.
+   */
+  const setFlag = useCallback(
+    (flag: keyof Input, value: boolean) => {
+      const state = stateRef.current;
+      if (value && (!state || paused || state.over)) return;
+      if (inputRef.current[flag] === value) return;
+      inputRef.current[flag] = value;
+      logRef.current.push({
+        type: `${flag}_${value ? "down" : "up"}` as AsteroidsActionType,
+        t: gameTimeRef.current,
+      });
+    },
+    [paused],
+  );
 
   // Teclado. Todas las teclas del juego cancelan su efecto por defecto, para
   // que Space no desplace la página.
@@ -430,16 +485,14 @@ export function AsteroidsGame({
       const flag = flagFor(event.code);
       if (!flag) return;
       event.preventDefault();
-      const state = stateRef.current;
-      if (!state || paused || state.over) return;
-      inputRef.current[flag] = true;
+      setFlag(flag, true);
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
       const flag = flagFor(event.code);
       if (!flag) return;
       event.preventDefault();
-      inputRef.current[flag] = false;
+      setFlag(flag, false);
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -448,17 +501,7 @@ export function AsteroidsGame({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [paused]);
-
-  /** Marca o borra una bandera de entrada desde un mando de pantalla. */
-  const setFlag = useCallback(
-    (flag: keyof Input, value: boolean) => {
-      const state = stateRef.current;
-      if (value && (!state || paused || state.over)) return;
-      inputRef.current[flag] = value;
-    },
-    [paused],
-  );
+  }, [setFlag]);
 
   /**
    * Mando de pantalla: marca la bandera al tocar y la borra al soltar. Sin

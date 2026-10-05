@@ -98,6 +98,8 @@ export type AsteroidsState = {
   over: boolean;
   /** Rocas destruidas desde la última caída, para el objeto garantizado. */
   killsSinceDrop: number;
+  /** Generador de números aleatorios. Sembrable para el replay en servidor (SPEC 35). */
+  rng: () => number;
 };
 
 /** Radio por tamaño: el índice 0 no se usa. */
@@ -141,8 +143,10 @@ const DROP_TTL = 12;
 /** `dt` topado: una pestaña que vuelve del fondo no teletransporta nada. */
 export const MAX_DT = 0.05;
 
-const rand = (min: number, max: number) => min + Math.random() * (max - min);
-const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
+const rand = (rng: () => number, min: number, max: number) =>
+  min + rng() * (max - min);
+const randInt = (rng: () => number, min: number, max: number) =>
+  Math.floor(rand(rng, min, max + 1));
 
 /** Envolvente toroidal: salir por un borde es entrar por el opuesto. */
 export function wrap(v: number, max: number): number {
@@ -161,15 +165,15 @@ export function rocksForLevel(level: number): number {
   return Math.min(MAX_ROCKS, 3 + level);
 }
 
-function createRock(x: number, y: number, size: Size): Rock {
-  const angle = rand(0, Math.PI * 2);
-  const speed = SPEEDS[size] + rand(-15, 15);
+function createRock(rng: () => number, x: number, y: number, size: Size): Rock {
+  const angle = rand(rng, 0, Math.PI * 2);
+  const speed = SPEEDS[size] + rand(rng, -15, 15);
   const radius = RADII[size];
-  const n = randInt(8, 13);
+  const n = randInt(rng, 8, 13);
   const verts: number[][] = [];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
-    const r = radius * rand(0.6, 1);
+    const r = radius * rand(rng, 0.6, 1);
     verts.push([Math.cos(a) * r, Math.sin(a) * r]);
   }
   return {
@@ -178,8 +182,8 @@ function createRock(x: number, y: number, size: Size): Rock {
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
     size,
-    rot: rand(0, Math.PI * 2),
-    rotSpeed: rand(-1.2, 1.2),
+    rot: rand(rng, 0, Math.PI * 2),
+    rotSpeed: rand(rng, -1.2, 1.2),
     verts,
   };
 }
@@ -206,14 +210,17 @@ function spawnWave(state: AsteroidsState): void {
     let x = 0;
     let y = 0;
     do {
-      x = rand(0, WORLD_W);
-      y = rand(0, WORLD_H);
+      x = rand(state.rng, 0, WORLD_W);
+      y = rand(state.rng, 0, WORLD_H);
     } while (Math.hypot(x - WORLD_W / 2, y - WORLD_H / 2) < SAFE_DIST);
-    state.rocks.push(createRock(x, y, 3));
+    state.rocks.push(createRock(state.rng, x, y, 3));
   }
 }
 
-export function createState(lives: number): AsteroidsState {
+export function createState(
+  lives: number,
+  rng: () => number = Math.random,
+): AsteroidsState {
   const state: AsteroidsState = {
     ship: createShip(),
     bullets: [],
@@ -225,6 +232,7 @@ export function createState(lives: number): AsteroidsState {
     level: 1,
     over: false,
     killsSinceDrop: 0,
+    rng,
   };
   spawnWave(state);
   return state;
@@ -253,9 +261,9 @@ function nextWave(state: AsteroidsState): void {
 
 function explode(state: AsteroidsState, x: number, y: number, count: number) {
   for (let i = 0; i < count; i++) {
-    const angle = rand(0, Math.PI * 2);
-    const speed = rand(30, 130);
-    const life = rand(0.4, 1.1);
+    const angle = rand(state.rng, 0, Math.PI * 2);
+    const speed = rand(state.rng, 30, 130);
+    const life = rand(state.rng, 0.4, 1.1);
     state.particles.push({
       x,
       y,
@@ -278,15 +286,15 @@ function destroyRock(state: AsteroidsState, rock: Rock): Rock[] {
 
   if (state.drops.length === 0) {
     state.killsSinceDrop++;
-    if (state.killsSinceDrop >= DROP_PITY || Math.random() < DROP_CHANCE) {
-      const angle = rand(0, Math.PI * 2);
-      const speed = rand(20, 40);
+    if (state.killsSinceDrop >= DROP_PITY || state.rng() < DROP_CHANCE) {
+      const angle = rand(state.rng, 0, Math.PI * 2);
+      const speed = rand(state.rng, 20, 40);
       state.drops.push({
         x: rock.x,
         y: rock.y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        kind: Math.random() < 0.5 ? "triple" : "shield",
+        kind: state.rng() < 0.5 ? "triple" : "shield",
         ttl: DROP_TTL,
       });
       state.killsSinceDrop = 0;
@@ -296,8 +304,8 @@ function destroyRock(state: AsteroidsState, rock: Rock): Rock[] {
   if (rock.size <= 1) return [];
   const smaller = (rock.size - 1) as Size;
   return [
-    createRock(rock.x, rock.y, smaller),
-    createRock(rock.x, rock.y, smaller),
+    createRock(state.rng, rock.x, rock.y, smaller),
+    createRock(state.rng, rock.x, rock.y, smaller),
   ];
 }
 

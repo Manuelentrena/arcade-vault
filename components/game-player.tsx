@@ -25,6 +25,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { TetrixActionLog } from "@/lib/tetris-replay";
 import type { SerpienteActionLog } from "@/lib/serpiente-replay";
 import type { BuscaminasActionLog } from "@/lib/buscaminas-replay";
+import type { AsteroidsActionLog } from "@/lib/asteroids-replay";
 
 /**
  * Partida recuperada al volver de /auth. Viaja en la URL (`?puntuacion=`) y la
@@ -78,7 +79,11 @@ export type EngineProps = {
    * reproductor pueda pedir el replay en servidor antes de guardar.
    */
   onOver: (
-    log?: TetrixActionLog | SerpienteActionLog | BuscaminasActionLog,
+    log?:
+      | TetrixActionLog
+      | SerpienteActionLog
+      | BuscaminasActionLog
+      | AsteroidsActionLog,
   ) => void;
   /** Vidas iniciales reales, de `games.vidas` (SPEC 18). */
   initialLives: number;
@@ -254,7 +259,11 @@ export function GamePlayer({
   // `handleOver` lo escribe y solo `handleSave` lo lee, así que un ref basta
   // — no necesita disparar un repintado.
   const actionLogRef = useRef<
-    TetrixActionLog | SerpienteActionLog | BuscaminasActionLog | null
+    | TetrixActionLog
+    | SerpienteActionLog
+    | BuscaminasActionLog
+    | AsteroidsActionLog
+    | null
   >(null);
 
   // El panel del tubo y el botón que lo abrió. El botón no se guarda por `ref`
@@ -337,7 +346,13 @@ export function GamePlayer({
     setRun(next);
   }, []);
   const handleOver = useCallback(
-    (log?: TetrixActionLog | SerpienteActionLog | BuscaminasActionLog) => {
+    (
+      log?:
+        | TetrixActionLog
+        | SerpienteActionLog
+        | BuscaminasActionLog
+        | AsteroidsActionLog,
+    ) => {
       actionLogRef.current = log ?? null;
       setOver(true);
     },
@@ -355,7 +370,11 @@ export function GamePlayer({
     async (
       slug: string,
       token: string,
-      log: TetrixActionLog | SerpienteActionLog | BuscaminasActionLog,
+      log:
+        | TetrixActionLog
+        | SerpienteActionLog
+        | BuscaminasActionLog
+        | AsteroidsActionLog,
     ): Promise<ReplayProof | null> => {
       try {
         const res = await fetch(`/api/validar-partida-${slug}`, {

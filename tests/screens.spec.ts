@@ -28,6 +28,10 @@ import {
   type BuscaminasActionLog,
 } from "../lib/buscaminas-replay";
 import {
+  replayAsteroides,
+  type AsteroidsActionLog,
+} from "../lib/asteroids-replay";
+import {
   createState as createBuscaminasState,
   reveal as revealCell,
   setCursor as setBuscaminasCursor,
@@ -597,6 +601,15 @@ test.describe("reproductor", () => {
    * cuenta semilla (PX_KAI); si los dos proyectos jugaran ARKANOID a la vez,
    * el que puntuara menos no superaría la marca que acaba de guardar el otro
    * y GUARDAR PUNTUACIÓN nunca aparecería. No es una diferencia de viewport.
+   *
+   * SPEC 35 le añade la comprobación de la home (ticker de actividad y top
+   * de jugadores): hasta SPEC 34 esa verificación vivía en una prueba propia
+   * de "fin de partida como invitado" sobre una partida recuperada en
+   * ASTEROIDES, el último motor libre de `requiere_replay` que no competía
+   * ya por su propio récord aquí. SPEC 35 le activa `requiere_replay` a
+   * ASTEROIDES y agota los candidatos, así que esta es ahora la única
+   * prueba con un guardado real sin esa carrera donde la comprobación puede
+   * seguir viviendo.
    */
   test("quedarse sin vidas abre el panel y la primera puntuación se guarda como récord", async ({
     page,
@@ -633,6 +646,7 @@ test.describe("reproductor", () => {
 
     // Primera vez que PX_KAI juega ARKANOID en esta base: sin marca previa,
     // cuenta como récord y save_score inserta de verdad en `scores`.
+    const formateada = await panel.locator(".final").innerText();
     await panel.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }).click();
     await expect(page.locator(".toast-saved")).toContainText(
       "¡NUEVA MARCA PERSONAL!",
@@ -641,6 +655,18 @@ test.describe("reproductor", () => {
     // Verificación de extremo a extremo: la ficha ya lee esa fila real.
     await page.goto("/juego/arkanoid");
     await expect(page.locator(".lb-row").first()).toContainText("PX_KAI");
+
+    // Y la home: el ticker de actividad y el top de jugadores también leen
+    // esta misma fila real (SPEC 27, trasladado aquí desde SPEC 34/35).
+    await page.goto("/");
+    await hydrated(page);
+    await page
+      .locator(".home-section", { hasText: "ACTIVIDAD EN VIVO" })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.locator(".tick-row", { hasText: formateada }),
+    ).toBeVisible({ timeout: NAV_TIMEOUT });
+    await expect(page.locator(".top-row", { hasText: "PX_KAI" })).toBeVisible();
   });
 
   test("REINICIAR reinicia la partida", async ({ page }) => {
@@ -814,71 +840,65 @@ test.describe("fin de partida como invitado", () => {
   });
 
   /**
-   * ASTEROIDES, no TETRIX: esta prueba autoguarda de verdad en `scores`
-   * (SPEC 18); TETRIX se deja intacto para las capturas de referencia y para
-   * no competir por el mismo récord con la prueba de ARKANOID de arriba. La
-   * partida recuperada no necesita el motor real: solo la query de la URL.
+   * SPEC 35: ya no se puede demostrar con ningún motor del catálogo. Hasta
+   * SPEC 34 esta prueba volvía con una partida recuperada —solo la query de
+   * la URL, sin motor real de por medio— y la veía autoguardarse de verdad
+   * en ASTEROIDES: el único motor, de los cinco, que todavía no exigía
+   * replay sin competir ya por su propio récord con "reproductor"
+   * (ARKANOID). SPEC 35 le activa `requiere_replay` también a ASTEROIDES, y
+   * con eso se acaban los candidatos: ARKANOID es el único que queda sin
+   * exigirlo, pero ya compite por su propio récord en "reproductor" — un
+   * segundo guardado real ahí reabriría justo la carrera que esta prueba
+   * existía para evitar, y no una de las improbables: con una partida real
+   * de ARKANOID tardando ~11 s de reloj y esta prueba apenas un segundo, el
+   * guardado recuperado gana la carrera casi siempre, no casi nunca (medido
+   * en este mismo cambio: falla en todas las repeticiones).
    *
-   * SPEC 28: solo en desktop. La puntuación es aleatoria, pero eso no evita
-   * la carrera — solo la hace menos frecuente: desktop y mobile comparten
-   * cuenta y juego, así que si corrieran a la vez, el que puntuara menos no
-   * superaría la marca que acaba de guardar el otro y el toast nunca
-   * aparecería en ese proyecto. El mismo arreglo que ya tenía la prueba
-   * equivalente de ARKANOID en este mismo describe. No es una diferencia de
-   * viewport.
+   * Lo que sí sigue siendo cierto, y es justo lo que introduce esta spec: una
+   * partida recuperada en un motor que exige replay no tiene ningún registro
+   * de acciones que mandarle al servidor —nunca hubo un motor real jugando,
+   * solo la query de la URL—, así que `handleSave()` no puede reproducirla y
+   * el intento falla exactamente igual que una puntuación que no es récord:
+   * sin aviso visible, sin guardar nada. El efecto de autoguardado ya lo
+   * intenta solo al montar, así que el panel llega con el error ya puesto.
+   * Nada que guardar significa cero escrituras en `scores`: esta prueba no
+   * compite por ningún récord con nadie.
    *
-   * SPEC 34: también cubre lo que antes probaba un test propio de BUSCAMINAS
-   * en "actividad en vivo" (que el récord real aparece en el ticker y en el
-   * top de jugadores de la home). Se fusionó aquí porque, tras cerrar
-   * BUSCAMINAS con `requiere_replay`, solo ARKANOID y ASTEROIDES siguen sin
-   * exigir replay para una partida recuperada — y ARKANOID ya compite por su
-   * propio récord en "reproductor". Un segundo test de ASTEROIDES habría
-   * reabierto la misma carrera que esta prueba ya evita a propósito.
+   * La cobertura de "un récord real aparece en la ficha y en la home"
+   * (SPEC 27, fusionada aquí desde SPEC 34 cuando BUSCAMINAS dejó de servir)
+   * sigue viva, pero se traslada al único guardado real que queda sin esta
+   * carrera: el de ARKANOID en "reproductor", extendido más abajo para
+   * comprobar también la home.
    */
-  test("al volver con sesión, una partida récord se autoguarda de verdad", async ({
+  test("una partida recuperada en un motor con replay no se autoguarda: no hay registro que reproducir", async ({
     page,
-    isMobile,
   }) => {
-    test.skip(
-      isMobile,
-      "compite por la misma cuenta y el mismo juego que desktop",
-    );
-    const puntuacion = 10_000 + Math.floor(Math.random() * 900_000);
-    const formateada = puntuacion.toLocaleString("es-ES");
-
-    // Con sesión de verdad: el helper signIn() no codifica `next`, así que la
-    // vuelta se reproduce navegando directamente a la URL que /auth entrega.
     await signIn(page);
-    await page.goto(`/jugar/asteroides?puntuacion=${puntuacion}&nivel=3`);
+    await page.goto("/jugar/asteroides?puntuacion=55555&nivel=2");
 
     const panel = page.getByRole("dialog");
     await expect(panel).toBeVisible();
-    await expect(panel.locator(".final")).toHaveText(formateada);
+    await expect(panel.locator(".final")).toHaveText("55.555");
     // Vuelve en estado fin de partida, dentro del tubo.
     await expect(page.locator(".crt-screen .crt-menu h2")).toHaveText(
       "FIN DEL JUEGO",
     );
-    // Primera vez que PX_KAI juega ASTEROIDES: sin marca previa, se
-    // autoguarda como récord sin que el jugador pulse nada.
-    await expect(page.locator(".toast-saved")).toContainText(
-      `¡NUEVA MARCA PERSONAL! ${formateada}`,
+
+    // Nunca un "¡NUEVA MARCA PERSONAL!" fabricado: el intento de autoguardado
+    // falla igual que uno que no es récord, con el mismo botón para
+    // reintentar y el mismo aviso de error.
+    await expect(panel.locator(".toast-saved")).toHaveCount(0);
+    await expect(panel.locator(".save-error")).toHaveText(
+      "NO SE PUDO GUARDAR_",
     );
-
-    // Verificación de extremo a extremo: la ficha ya lee esa fila real.
-    await page.goto("/juego/asteroides");
-    await expect(page.locator(".lb-row").first()).toContainText("PX_KAI");
-
-    // Y la home: el ticker de actividad y el top de jugadores también leen
-    // esta misma fila real (SPEC 27, fusionado aquí desde SPEC 34).
-    await page.goto("/");
-    await hydrated(page);
-    await page
-      .locator(".home-section", { hasText: "ACTIVIDAD EN VIVO" })
-      .scrollIntoViewIfNeeded();
     await expect(
-      page.locator(".tick-row", { hasText: formateada }),
-    ).toBeVisible({ timeout: NAV_TIMEOUT });
-    await expect(page.locator(".top-row", { hasText: "PX_KAI" })).toBeVisible();
+      panel.getByRole("button", { name: "GUARDAR PUNTUACIÓN" }),
+    ).toBeVisible();
+
+    // Verificación negativa: nada se guardó de verdad.
+    await page.goto("/juego/asteroides");
+    await expect(page.locator(".lb-row")).toHaveCount(0);
+    await expect(page.getByText("AÚN NADIE HA JUGADO")).toBeVisible();
   });
 });
 
@@ -2267,6 +2287,108 @@ test.describe("BUSCAMINAS — motor de replay (módulo puro)", () => {
     ];
 
     const result = replayBuscaminas(log, seed, 1);
+    expect(result.over).toBe(true);
+  });
+});
+
+/**
+ * SPEC 35 — el replay en servidor de ASTEROIDES, tercero en seguir a TETRIX,
+ * SERPIENTE y BUSCAMINAS, y el primero con física continua: `step()` integra
+ * posición y velocidad con un `dt` real, en vez de avanzar por un acumulador
+ * de ticks discretos. `replayAsteroides()` es la pieza que hace que el score
+ * guardado en `scores` para ASTEROIDES ya no sea el que afirma el cliente:
+ * misma semilla y mismo log siempre dan el mismo resultado, el tiempo real
+ * entre pulsaciones y sueltas —no un contador de fotogramas— es lo que mueve
+ * la física, y el tramo entre una pausa y su reanudación no cuenta. A
+ * diferencia de TETRIX/SERPIENTE, el choque final no necesita ninguna marca
+ * «over»: el registro no tiene ese tipo de entrada (ver `AsteroidsActionType`
+ * en `lib/asteroids-replay.ts`) porque el replay sigue integrando con las
+ * banderas que queden mantenidas después de la última entrada, igual que el
+ * bucle del cliente sigue llamando a `step()` aunque nadie toque nada.
+ */
+test.describe("ASTEROIDES — motor de replay (módulo puro)", () => {
+  test("misma semilla y mismo log siempre dan el mismo resultado", () => {
+    const seed = "deadbeefcafebabe0011223344556677";
+    const log: AsteroidsActionLog = [
+      { type: "thrust_down", t: 0 },
+      { type: "left_down", t: 50 },
+      { type: "thrust_up", t: 300 },
+      { type: "fire_down", t: 320 },
+      { type: "fire_up", t: 500 },
+    ];
+
+    const a = replayAsteroides(log, seed, 5);
+    const b = replayAsteroides(log, seed, 5);
+    expect(a).toEqual(b);
+  });
+
+  test("la física se deriva del tiempo real entre pulsaciones y sueltas, no de un contador de fotogramas", () => {
+    const seed = "00000001";
+    // Disparo mantenido 10 ms: el enfriamiento (200 ms) no deja salir más de
+    // una bala antes de soltar.
+    const quick = replayAsteroides(
+      [
+        { type: "fire_down", t: 0 },
+        { type: "fire_up", t: 10 },
+      ],
+      seed,
+      5,
+    );
+    // El mismo disparo, mantenido 3 s: de sobra para una ráfaga de balas de
+    // más antes de soltar. El resultado tiene que notarlo.
+    const slow = replayAsteroides(
+      [
+        { type: "fire_down", t: 0 },
+        { type: "fire_up", t: 3000 },
+      ],
+      seed,
+      5,
+    );
+    expect(slow).not.toEqual(quick);
+  });
+
+  test("el tiempo entre una pausa y su reanudación no cuenta para la física", () => {
+    const seed = "00000001";
+    // Diez minutos de pausa entre el empuje inicial y el disparo que sigue...
+    const withPause: AsteroidsActionLog = [
+      { type: "thrust_down", t: 0 },
+      { type: "thrust_up", t: 50 },
+      { type: "pause", t: 100 },
+      { type: "resume", t: 600000 },
+      { type: "fire_down", t: 600010 },
+      { type: "fire_up", t: 603010 },
+    ];
+    // ...tiene que dar exactamente el mismo resultado que una pausa breve:
+    // el tiempo en pausa no se integra, así que lo único que cuenta es el
+    // hueco corto entre `resume` y la siguiente entrada.
+    const withoutPause: AsteroidsActionLog = [
+      { type: "thrust_down", t: 0 },
+      { type: "thrust_up", t: 50 },
+      { type: "pause", t: 100 },
+      { type: "resume", t: 200 },
+      { type: "fire_down", t: 210 },
+      { type: "fire_up", t: 3210 },
+    ];
+
+    const a = replayAsteroides(withPause, seed, 5);
+    const b = replayAsteroides(withoutPause, seed, 5);
+    expect(a).toEqual(b);
+  });
+
+  /**
+   * El choque de la nave contra una roca casi nunca coincide con un cambio
+   * de bandera —la nave puede llevar rato sin que nadie toque nada cuando
+   * una roca la alcanza—, pero a diferencia de TETRIX/SERPIENTE esto no
+   * necesita ninguna marca «over» en el registro: `replayAsteroides()`
+   * sigue integrando con las banderas que queden mantenidas después de la
+   * última entrada, así que un único `thrust_down` sin soltar nunca basta
+   * para que termine por su cuenta.
+   */
+  test("el choque, sin ningún cambio de bandera que lo marque, no necesita ninguna marca aparte", () => {
+    const seed = "00000000";
+    const log: AsteroidsActionLog = [{ type: "thrust_down", t: 0 }];
+
+    const result = replayAsteroides(log, seed, 1);
     expect(result.over).toBe(true);
   });
 });
