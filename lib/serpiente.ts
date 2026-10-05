@@ -83,6 +83,12 @@ export type SerpienteState = {
   level: number;
   /** true tras chocar: el reproductor abre el panel de fin. */
   over: boolean;
+  /**
+   * Generador de aleatoriedad para `placeFruit()` (SPEC 33). Detalle interno
+   * de la reproducibilidad: no viaja en ningún tipo que vea el componente
+   * fuera de pasarlo a `createState`.
+   */
+  rng: () => number;
 };
 
 /** Paso del nivel dado, en ms. Clavado en TICK_MIN desde el nivel 9. */
@@ -117,10 +123,13 @@ function placeFruit(state: SerpienteState): void {
   // La rejilla es mucho mayor que la serpiente más larga alcanzable, así que
   // `free` no se vacía en la práctica; la guarda evita un undefined si lo hace.
   if (free.length === 0) return;
-  state.fruit = free[Math.floor(Math.random() * free.length)];
+  state.fruit = free[Math.floor(state.rng() * free.length)];
 }
 
-export function createState(lives: number): SerpienteState {
+export function createState(
+  lives: number,
+  rng: () => number = Math.random,
+): SerpienteState {
   const cy = Math.floor(ROWS / 2);
   const cx = Math.floor(COLS / 2);
 
@@ -138,6 +147,7 @@ export function createState(lives: number): SerpienteState {
     lives,
     level: 1,
     over: false,
+    rng,
   };
   placeFruit(state);
   return state;

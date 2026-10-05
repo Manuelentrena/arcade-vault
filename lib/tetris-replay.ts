@@ -23,6 +23,8 @@ import {
   softDrop,
   tick,
 } from "@/lib/tetris";
+import { createSeededRng } from "@/lib/replay-rng";
+export { createSeededRng } from "@/lib/replay-rng";
 
 export type TetrixActionType =
   | "move_left"
@@ -46,34 +48,6 @@ export type ReplayResult = {
   level: number;
   over: boolean;
 };
-
-/** mulberry32: PRNG determinista y seedable a partir de un entero de 32 bits. */
-function mulberry32(seed: number): () => number {
-  let a = seed;
-  return function random() {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** La semilla hex de `start_game_session` a un entero de 32 bits para sembrar el PRNG. */
-function seedToInt(seed: string): number {
-  return parseInt(seed.slice(0, 8), 16) || 0;
-}
-
-/**
- * El mismo generador de piezas que usa `replayTetrix()`, exportado para que
- * `components/tetris-game.tsx` lo siembre con la semilla de
- * `start_game_session` y juegue exactamente la secuencia que el servidor
- * reproducirá después — una sola implementación del PRNG, no dos que
- * tendrían que mantenerse de acuerdo.
- */
-export function createSeededRng(seed: string): () => number {
-  return mulberry32(seedToInt(seed));
-}
 
 export function replayTetrix(
   log: TetrixActionLog,

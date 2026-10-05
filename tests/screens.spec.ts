@@ -19,6 +19,10 @@ import {
   tickMs,
 } from "../lib/serpiente";
 import { replayTetrix, type TetrixActionLog } from "../lib/tetris-replay";
+import {
+  replaySerpiente,
+  type SerpienteActionLog,
+} from "../lib/serpiente-replay";
 
 const ROUTES = [
   { name: "home", path: "/" },
@@ -2012,6 +2016,79 @@ test.describe("TETRIX — motor de replay (módulo puro)", () => {
 
     const a = replayTetrix(withPause, seed, 5, null);
     const b = replayTetrix(withoutPause, seed, 5, null);
+    expect(a).toEqual(b);
+  });
+});
+
+/**
+ * SPEC 33 — el replay en servidor de SERPIENTE, primer motor en seguir a
+ * TETRIX. `replaySerpiente()` es la pieza que hace que el score guardado en
+ * `scores` para SERPIENTE ya no sea el que afirma el cliente: misma semilla y
+ * mismo log siempre dan el mismo resultado, y el tiempo real entre giros
+ * —no un contador de pasos— es lo que mueve la rejilla, salvo el tramo entre
+ * una pausa y su reanudación, que no cuenta.
+ */
+test.describe("SERPIENTE — motor de replay (módulo puro)", () => {
+  test("misma semilla y mismo log siempre dan el mismo resultado", () => {
+    const seed = "deadbeefcafebabe0011223344556677";
+    const log: SerpienteActionLog = [
+      { type: "dir_up", t: 0 },
+      { type: "turn_right", t: 50 },
+      { type: "dir_left", t: 400 },
+    ];
+
+    const a = replaySerpiente(log, seed, 1);
+    const b = replaySerpiente(log, seed, 1);
+    expect(a).toEqual(b);
+  });
+
+  test("el paso se deriva del tiempo real entre giros, no de un contador fijo", () => {
+    const seed = "00000001";
+    // Dos huecos de 10 ms entre el mismo par de giros: ninguno da tiempo a
+    // un solo `step()` al nivel 1 (150 ms de intervalo).
+    const quick = replaySerpiente(
+      [
+        { type: "dir_up", t: 0 },
+        { type: "dir_right", t: 10 },
+      ],
+      seed,
+      1,
+    );
+    // El mismo par de giros, pero con un minuto real entre ellos: de sobra
+    // para que la serpiente avance muchos pasos de más antes del segundo
+    // giro. El resultado tiene que notarlo.
+    const slow = replaySerpiente(
+      [
+        { type: "dir_up", t: 0 },
+        { type: "dir_right", t: 60000 },
+      ],
+      seed,
+      1,
+    );
+    expect(slow).not.toEqual(quick);
+  });
+
+  test("el tiempo entre una pausa y su reanudación no cuenta para el paso", () => {
+    const seed = "0000000a";
+    // Diez minutos de pausa entre el primer y el segundo giro...
+    const withPause: SerpienteActionLog = [
+      { type: "dir_up", t: 0 },
+      { type: "pause", t: 100 },
+      { type: "resume", t: 600000 },
+      { type: "dir_right", t: 600100 },
+    ];
+    // ...tiene que dar exactamente el mismo resultado que una pausa breve:
+    // el acumulador se reinicia en cada reanudación, así que lo único que
+    // cuenta es el hueco corto entre `resume` y el siguiente giro.
+    const withoutPause: SerpienteActionLog = [
+      { type: "dir_up", t: 0 },
+      { type: "pause", t: 100 },
+      { type: "resume", t: 200 },
+      { type: "dir_right", t: 300 },
+    ];
+
+    const a = replaySerpiente(withPause, seed, 1);
+    const b = replaySerpiente(withoutPause, seed, 1);
     expect(a).toEqual(b);
   });
 });
