@@ -23,6 +23,7 @@ import type { GameSession, ReplayProof } from "@/lib/supabase/scores";
 import { displayName } from "@/lib/supabase/user";
 import { createClient } from "@/lib/supabase/client";
 import type { TetrixActionLog } from "@/lib/tetris-replay";
+import type { SerpienteActionLog } from "@/lib/serpiente-replay";
 
 /**
  * Partida recuperada al volver de /auth. Viaja en la URL (`?puntuacion=`) y la
@@ -71,18 +72,18 @@ export type EngineProps = {
   onTogglePause: () => void;
   onRun: (run: EngineRun) => void;
   /**
-   * El `log` es el registro de acciones de la partida (SPEC 32); solo
-   * TETRIX lo manda, para que el reproductor pueda pedir el replay en
-   * servidor antes de guardar.
+   * El `log` es el registro de acciones de la partida (SPEC 32, SPEC 33);
+   * solo los motores con `games.requiere_replay` lo mandan, para que el
+   * reproductor pueda pedir el replay en servidor antes de guardar.
    */
-  onOver: (log?: TetrixActionLog) => void;
+  onOver: (log?: TetrixActionLog | SerpienteActionLog) => void;
   /** Vidas iniciales reales, de `games.vidas` (SPEC 18). */
   initialLives: number;
   /** Tope de nivel real, de `games.niveles`; null = sin tope. Solo TETRIX lo usa. */
   maxLevel: number | null;
   /** El motor publica aquí su PadHandle; el mando de móvil lo pulsa (SPEC 21). */
   padRef: Ref<PadHandle>;
-  /** Semilla de `start_game_session` (SPEC 32); cadena vacía si no hay sesión. Solo TETRIX la usa. */
+  /** Semilla de `start_game_session` (SPEC 32); cadena vacía si no hay sesión. Solo TETRIX y SERPIENTE la usan. */
   seed: string;
 };
 
@@ -246,10 +247,12 @@ export function GamePlayer({
   // Al remontar el motor (`runKey`) React reasigna el ref solo.
   const padRef = useRef<PadHandle | null>(null);
 
-  // Registro de acciones de la última partida de TETRIX (SPEC 32); solo
+  // Registro de acciones de la última partida (SPEC 32, SPEC 33); solo
   // `handleOver` lo escribe y solo `handleSave` lo lee, así que un ref basta
   // — no necesita disparar un repintado.
-  const tetrixLogRef = useRef<TetrixActionLog | null>(null);
+  const actionLogRef = useRef<TetrixActionLog | SerpienteActionLog | null>(
+    null,
+  );
 
   // El panel del tubo y el botón que lo abrió. El botón no se guarda por `ref`
   // porque son dos —el del HUD y la pastilla del mando— y solo uno de los dos
@@ -330,26 +333,29 @@ export function GamePlayer({
     if (ignoreRun.current) return;
     setRun(next);
   }, []);
-  const handleOver = useCallback((log?: TetrixActionLog) => {
-    tetrixLogRef.current = log ?? null;
-    setOver(true);
-  }, []);
+  const handleOver = useCallback(
+    (log?: TetrixActionLog | SerpienteActionLog) => {
+      actionLogRef.current = log ?? null;
+      setOver(true);
+    },
+    [],
+  );
 
   /**
-   * Manda el registro de acciones de TETRIX a la ruta de validación para
-   * que el servidor reproduzca la partida (SPEC 32). Vive aquí y no en
-   * `lib/supabase/scores.ts` porque ese módulo importa `@/lib/supabase/
+   * Manda el registro de acciones de la partida a la ruta de validación del
+   * motor para que el servidor la reproduzca (SPEC 32, SPEC 33). Vive aquí y
+   * no en `lib/supabase/scores.ts` porque ese módulo importa `@/lib/supabase/
    * server` (usa `next/headers`), que no puede entrar en el bundle del
    * cliente.
    */
-  const validarPartidaTetrix = useCallback(
+  const validarPartida = useCallback(
     async (
       slug: string,
       token: string,
-      log: TetrixActionLog,
+      log: TetrixActionLog | SerpienteActionLog,
     ): Promise<ReplayProof | null> => {
       try {
-        const res = await fetch("/api/validar-partida-tetrix", {
+        const res = await fetch(`/api/validar-partida-${slug}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ slug, token, log }),
@@ -379,18 +385,15 @@ export function GamePlayer({
     setSaving(true);
     setSaveError(false);
 
-    // TETRIX no manda su propio score/nivel: el replay en servidor es quien
-    // decide qué se guarda. Sin un registro válido no hay nada que intentar.
+    // Un motor con requiere_replay no manda su propio score/nivel: el
+    // replay en servidor es quien decide qué se guarda. Sin un registro
+    // válido no hay nada que intentar.
     let proof: string | undefined;
     let score = run.score;
     let level = run.level;
     if (game.requiereReplay) {
-      const replay = tetrixLogRef.current
-        ? await validarPartidaTetrix(
-            game.id,
-            gameSession.token,
-            tetrixLogRef.current,
-          )
+      const replay = actionLogRef.current
+        ? await validarPartida(game.id, gameSession.token, actionLogRef.current)
         : null;
       if (!replay) {
         setSaving(false);
@@ -432,7 +435,7 @@ export function GamePlayer({
     run.score,
     run.level,
     gameSession,
-    validarPartidaTetrix,
+    validarPartida,
   ]);
 
   // La partida recuperada de /auth se autoguarda si es récord; si no lo es,

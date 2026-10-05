@@ -22,9 +22,13 @@ import {
   enqueueTurn,
   step,
   tickMs,
-  type Dir,
   type SerpienteState,
 } from "@/lib/serpiente";
+import { createSeededRng } from "@/lib/replay-rng";
+import type {
+  SerpienteActionLog,
+  SerpienteActionType,
+} from "@/lib/serpiente-replay";
 
 /**
  * Techo del delta acumulado por fotograma. Sin él, volver de una pestaña en
@@ -52,6 +56,36 @@ const COLOR_FALLBACK = [
 
 export type SerpienteRun = { score: number; lives: number; level: number };
 
+/** Mutador del motor junto al tipo de giro que loguea (SPEC 33). */
+type ActionEntry = {
+  type: SerpienteActionType;
+  run: (state: SerpienteState) => void;
+};
+
+const ACTIONS = {
+  dirUp: { type: "dir_up", run: (s: SerpienteState) => enqueueDir(s, DIRS.up) },
+  dirDown: {
+    type: "dir_down",
+    run: (s: SerpienteState) => enqueueDir(s, DIRS.down),
+  },
+  dirLeft: {
+    type: "dir_left",
+    run: (s: SerpienteState) => enqueueDir(s, DIRS.left),
+  },
+  dirRight: {
+    type: "dir_right",
+    run: (s: SerpienteState) => enqueueDir(s, DIRS.right),
+  },
+  turnLeft: {
+    type: "turn_left",
+    run: (s: SerpienteState) => enqueueTurn(s, -1),
+  },
+  turnRight: {
+    type: "turn_right",
+    run: (s: SerpienteState) => enqueueTurn(s, 1),
+  },
+} satisfies Record<string, ActionEntry>;
+
 type SerpienteGameProps = {
   /** Lo controla el botón PAUSA del HUD. Con true, el bucle no avanza. */
   paused: boolean;
@@ -59,14 +93,20 @@ type SerpienteGameProps = {
   onTogglePause: () => void;
   /** El motor empuja aquí score / lives / level cuando cambian. */
   onRun: (run: SerpienteRun) => void;
-  /** Choque: el reproductor abre el panel de FIN DEL JUEGO. */
-  onOver: () => void;
+  /**
+   * Choque: el reproductor abre el panel de FIN DEL JUEGO. Lleva el
+   * registro de giros de la partida (SPEC 33) para que `game-player.tsx`
+   * pueda mandarlo al replay en servidor antes de guardar.
+   */
+  onOver: (log: SerpienteActionLog) => void;
   /** Vidas iniciales reales (`games.vidas`). */
   initialLives: number;
   /** Ignorado: el nivel de SERPIENTE no tiene techo (`games.niveles` = null). */
   maxLevel: number | null;
   /** Donde se publica el PadHandle que pulsa el mando de móvil (SPEC 21). */
   padRef: Ref<PadHandle>;
+  /** Semilla de `start_game_session` (SPEC 33): siembra el mismo generador que usará el replay. */
+  seed: string;
 };
 
 function SerpienteGameImpl({
@@ -76,13 +116,26 @@ function SerpienteGameImpl({
   onOver,
   initialLives,
   padRef,
+  seed,
 }: SerpienteGameProps) {
   const boardRef = useRef<HTMLCanvasElement | null>(null);
 
   // El estado del motor vive en un ref: a 60 fps un setState por fotograma
   // reconciliaría React para pintar en un canvas que React no gestiona.
   const stateRef = useRef<SerpienteState | null>(null);
-  if (stateRef.current === null) stateRef.current = createState(initialLives);
+  if (stateRef.current === null)
+    stateRef.current = createState(initialLives, createSeededRng(seed));
+
+  // Reloj e historial propios de la partida: el replay en servidor (SPEC 33)
+  // reproduce el paso a partir de estos mismos deltas de tiempo. El reloj
+  // se arma en un efecto, no durante el render, para no llamar a
+  // `performance.now()` (impuro) en ese paso.
+  const startRef = useRef(0);
+  const logRef = useRef<SerpienteActionLog>([]);
+  const prevPausedRef = useRef(paused);
+  useEffect(() => {
+    if (startRef.current === 0) startRef.current = performance.now();
+  }, []);
 
   const colorsRef = useRef<readonly string[]>(COLOR_FALLBACK);
   const lastRunRef = useRef<SerpienteRun | null>(null);
@@ -220,17 +273,35 @@ function SerpienteGameImpl({
   }, [draw, publish]);
 
   /**
-   * Encola un giro y repinta. Guarda propia de `paused`: el motor ya descarta
-   * un giro con la partida terminada, pero no sabe nada de la pausa.
+   * Aplica un giro del jugador, lo loguea con su timestamp y repinta. Guarda
+   * propia de `paused`: el motor ya descarta un giro con la partida
+   * terminada, pero no sabe nada de la pausa.
    */
   const turn = useCallback(
-    (apply: (state: SerpienteState) => void) => {
+    (action: ActionEntry) => {
       const state = stateRef.current;
       if (!state || paused || state.over) return;
-      apply(state);
+      action.run(state);
+      logRef.current.push({
+        type: action.type,
+        t: performance.now() - startRef.current,
+      });
     },
     [paused],
   );
+
+  // Pausa/reanudación entran en el registro igual que cualquier otro giro:
+  // el replay en servidor ignora el tiempo entre ambas (SPEC 33). Solo
+  // transiciones reales tras montar, nunca el valor inicial.
+  useEffect(() => {
+    if (prevPausedRef.current === paused) return;
+    prevPausedRef.current = paused;
+    if (stateRef.current?.over) return;
+    logRef.current.push({
+      type: paused ? "pause" : "resume",
+      t: performance.now() - startRef.current,
+    });
+  }, [paused]);
 
   // Bucle. A diferencia de BUSCAMINAS, aquí el estado avanza solo: el
   // acumulador drena pasos discretos y el intervalo se recalcula dentro del
@@ -257,7 +328,7 @@ function SerpienteGameImpl({
       draw();
       publish();
       if (state.over) {
-        onOverRef.current();
+        onOverRef.current(logRef.current);
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -278,21 +349,21 @@ function SerpienteGameImpl({
         onTogglePauseRef.current();
         return;
       }
-      const dir: Dir | null =
+      const action: ActionEntry | null =
         event.code === "ArrowUp"
-          ? DIRS.up
+          ? ACTIONS.dirUp
           : event.code === "ArrowDown"
-            ? DIRS.down
+            ? ACTIONS.dirDown
             : event.code === "ArrowLeft"
-              ? DIRS.left
+              ? ACTIONS.dirLeft
               : event.code === "ArrowRight"
-                ? DIRS.right
+                ? ACTIONS.dirRight
                 : null;
-      if (!dir) return;
+      if (!action) return;
       // preventDefault() antes de cualquier guarda: en pausa las flechas
       // seguirían desplazando la página si no.
       event.preventDefault();
-      turn((s) => enqueueDir(s, dir));
+      turn(action);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -315,22 +386,22 @@ function SerpienteGameImpl({
       press: (action: PadAction) => {
         switch (action) {
           case "up":
-            turn((s) => enqueueDir(s, DIRS.up));
+            turn(ACTIONS.dirUp);
             break;
           case "down":
-            turn((s) => enqueueDir(s, DIRS.down));
+            turn(ACTIONS.dirDown);
             break;
           case "left":
-            turn((s) => enqueueDir(s, DIRS.left));
+            turn(ACTIONS.dirLeft);
             break;
           case "right":
-            turn((s) => enqueueDir(s, DIRS.right));
+            turn(ACTIONS.dirRight);
             break;
           case "a":
-            turn((s) => enqueueTurn(s, 1));
+            turn(ACTIONS.turnRight);
             break;
           case "b":
-            turn((s) => enqueueTurn(s, -1));
+            turn(ACTIONS.turnLeft);
             break;
           default:
             break;
@@ -341,12 +412,12 @@ function SerpienteGameImpl({
     [turn],
   );
 
-  const padProps = (dir: Dir) => ({
+  const padProps = (action: ActionEntry) => ({
     type: "button" as const,
     className: "btn",
     onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
-      turn((s) => enqueueDir(s, dir));
+      turn(action);
     },
   });
 
@@ -375,28 +446,28 @@ function SerpienteGameImpl({
             <span className="l">GIRO</span>
             <div className="snake-pad">
               <button
-                {...padProps(DIRS.up)}
+                {...padProps(ACTIONS.dirUp)}
                 className="btn pad-up"
                 aria-label="Girar hacia arriba"
               >
                 ↑
               </button>
               <button
-                {...padProps(DIRS.left)}
+                {...padProps(ACTIONS.dirLeft)}
                 className="btn pad-left"
                 aria-label="Girar a la izquierda"
               >
                 ←
               </button>
               <button
-                {...padProps(DIRS.down)}
+                {...padProps(ACTIONS.dirDown)}
                 className="btn pad-down"
                 aria-label="Girar hacia abajo"
               >
                 ↓
               </button>
               <button
-                {...padProps(DIRS.right)}
+                {...padProps(ACTIONS.dirRight)}
                 className="btn pad-right"
                 aria-label="Girar a la derecha"
               >

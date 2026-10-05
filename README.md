@@ -523,6 +523,7 @@ npx skills@latest add Klerith/fernando-skills
 | [30 — Checklist básico de seguridad](specs/30-checklist-seguridad-basica.md)                                                                | Implementado | SPEC 16, SPEC 29                                        |
 | [31 — Cierre de warnings del Advisor de seguridad de Supabase](specs/31-cierre-warnings-advisor-supabase.md)                                | Implementado | SPEC 08, SPEC 16, SPEC 29, SPEC 30                      |
 | [32 — Replay en servidor para TETRIX](specs/32-replay-servidor-tetrix.md)                                                                   | Implementado | SPEC 13, SPEC 18, SPEC 29                               |
+| [33 — Replay en servidor para SERPIENTE](specs/33-replay-servidor-serpiente.md)                                                             | Implementado | SPEC 25, SPEC 29, SPEC 32                               |
 
 ## Deuda conocida
 
