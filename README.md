@@ -128,6 +128,18 @@ La clave secreta **no entra en el repositorio ni en el entorno de la aplicación
 
 Si el script no carga — un bloqueador de anuncios, la red — los tres botones siguen pulsables: el envío sale sin token, Supabase lo rechaza y el terminal rojo dice `VERIFICACIÓN ANTI-BOT FALLIDA, INTÉNTALO DE NUEVO`. Un bloqueador no deja la pantalla muerta y sin explicación.
 
+### Checklist básico de seguridad (SPEC 30)
+
+RLS en `public.games` y `public.scores` ya estaba habilitado desde `supabase/migrations/20260927082152_catalogo_juegos_y_puntuaciones.sql` (SPEC 16), y la política de `insert` insegura que un audit identificó en `scores` ya la retiró la SPEC 29 (`20261002130000_retira_policy_insert_scores.sql`). Nada pendiente ahí — queda constancia aquí porque es uno de los cinco puntos del checklist que trajo esta spec.
+
+De los otros cuatro, dos son configuración del repo (`minimum_password_length` subido a 8 en `supabase/config.toml`, y los headers de `next.config.ts` de más abajo) y dos son interruptores manuales del panel remoto, porque no existe clave equivalente para el stack local autoalojado — mismo patrón que el captcha y el modo invitado de arriba:
+
+1. **Authentication → Policies → Password**: longitud mínima **8**.
+2. La misma pantalla: activar **"Leaked password protection"**.
+3. **Authentication → Rate Limits**: signups a **30 cada 5 minutos por IP**.
+
+**`sign_in_sign_ups = 1000` se queda así en `config.toml` local a propósito.** No es el valor de producción: es el que necesita la suite de Playwright, que corre en paralelo (`workers: 2`) contra la misma IP — con 30 se cuelga a mitad de ejecución. El 30/5min de arriba es solo para el panel remoto.
+
 ### Purga automática de invitados
 
 Un invitado que no vuelve deja su fila en `auth.users` y en `profiles` para siempre: Supabase no recoge nada por su cuenta. Una vez al día, **a las 04:00 UTC**, un job de `pg_cron` llamado `purga-invitados` borra a los invitados que llevan **más de 30 días** sin iniciar sesión, hasta **200 por pasada**. Sólo toca a los anónimos; una cuenta registrada nunca entra en la selección.
@@ -507,6 +519,7 @@ npx skills@latest add Klerith/fernando-skills
 | [27 — Consultas redundantes, redirección de invitado y actividad real del home](specs/27-arreglos-rendimiento-invitado-y-actividad-home.md) | Implementado | SPEC 04, 06, 07, 16, 17, 18, 26                         |
 | [28 — Limpieza de la suite de tests y condición de carrera del salón](specs/28-limpieza-tests-y-condicion-de-carrera-salon.md)              | Implementado | SPEC 06, 07, 16, 17, 18, 21, 22, 26, 27                 |
 | [29 — RLS en `scores` y token de sesión de partida](specs/29-rls-scores-y-token-de-sesion.md)                                               | Implementado | SPEC 06, 07, 08, 16, 17, 18, 26                         |
+| [30 — Checklist básico de seguridad](specs/30-checklist-seguridad-basica.md)                                                                | Implementado | SPEC 16, SPEC 29                                        |
 
 ## Deuda conocida
 
