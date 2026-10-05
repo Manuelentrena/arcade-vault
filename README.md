@@ -135,8 +135,9 @@ RLS en `public.games` y `public.scores` ya estaba habilitado desde `supabase/mig
 De los otros cuatro, dos son configuración del repo (`minimum_password_length` subido a 8 en `supabase/config.toml`, y los headers de `next.config.ts` de más abajo) y dos son interruptores manuales del panel remoto, porque no existe clave equivalente para el stack local autoalojado — mismo patrón que el captcha y el modo invitado de arriba:
 
 1. **Authentication → Policies → Password**: longitud mínima **8**.
-2. La misma pantalla: activar **"Leaked password protection"**.
-3. **Authentication → Rate Limits**: signups a **30 cada 5 minutos por IP**.
+2. **Authentication → Rate Limits**: signups a **30 cada 5 minutos por IP**.
+
+**"Leaked password protection" no se activa.** No es un paso pendiente — es una función exclusiva del plan Pro de Supabase; el proyecto de este repo corre en el plan gratuito, donde el toggle ni siquiera aparece en el panel. El Advisor de seguridad seguirá marcándolo en WARN indefinidamente; se acepta como riesgo conocido (ver `SECURITY.md`) a menos que el proyecto pase a Pro.
 
 **`sign_in_sign_ups = 1000` se queda así en `config.toml` local a propósito.** No es el valor de producción: es el que necesita la suite de Playwright, que corre en paralelo (`workers: 2`) contra la misma IP — con 30 se cuelga a mitad de ejecución. El 30/5min de arriba es solo para el panel remoto.
 
@@ -520,6 +521,7 @@ npx skills@latest add Klerith/fernando-skills
 | [28 — Limpieza de la suite de tests y condición de carrera del salón](specs/28-limpieza-tests-y-condicion-de-carrera-salon.md)              | Implementado | SPEC 06, 07, 16, 17, 18, 21, 22, 26, 27                 |
 | [29 — RLS en `scores` y token de sesión de partida](specs/29-rls-scores-y-token-de-sesion.md)                                               | Implementado | SPEC 06, 07, 08, 16, 17, 18, 26                         |
 | [30 — Checklist básico de seguridad](specs/30-checklist-seguridad-basica.md)                                                                | Implementado | SPEC 16, SPEC 29                                        |
+| [31 — Cierre de warnings del Advisor de seguridad de Supabase](specs/31-cierre-warnings-advisor-supabase.md)                                | Implementado | SPEC 08, SPEC 16, SPEC 29, SPEC 30                      |
 
 ## Deuda conocida
 
