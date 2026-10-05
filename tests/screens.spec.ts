@@ -2018,6 +2018,35 @@ test.describe("TETRIX — motor de replay (módulo puro)", () => {
     const b = replayTetrix(withoutPause, seed, 5, null);
     expect(a).toEqual(b);
   });
+
+  /**
+   * El top-out casi nunca coincide con una acción: la pieza encaja por
+   * gravedad, no por un `hard_drop` del jugador, así que no hay ninguna
+   * acción que lleve ese instante al registro. Nueve `hard_drop` centrados
+   * (sin mover ni girar, con esta semilla) apilan la pieza diez justo
+   * debajo del techo; sin una marca para el momento en que esa décima
+   * pieza encaja sola por gravedad, el replay se queda en el último
+   * `hard_drop` y nunca se entera del top-out — exactamente el fallo real
+   * que `components/tetris-game.tsx` corrige logueando un `"over"` en el
+   * mismo fotograma en que su bucle de gravedad lo detecta.
+   */
+  test("el top-out por gravedad pura, sin ninguna acción que lo marque, necesita la marca «over»", () => {
+    const seed = "00000002";
+    const log: TetrixActionLog = Array.from({ length: 9 }, (_, i) => ({
+      type: "hard_drop" as const,
+      t: i * 100,
+    }));
+
+    const withoutOver = replayTetrix(log, seed, 1, null);
+    expect(withoutOver.over).toBe(false);
+
+    // La décima pieza encaja un segundo (un `tick()` a nivel 1) después del
+    // último `hard_drop` real, sin que el jugador haga nada.
+    const withOver: TetrixActionLog = [...log, { type: "over", t: 800 + 1000 }];
+    const result = replayTetrix(withOver, seed, 1, null);
+    expect(result.over).toBe(true);
+    expect(result.score).toBe(withoutOver.score);
+  });
 });
 
 /**
@@ -2090,6 +2119,75 @@ test.describe("SERPIENTE — motor de replay (módulo puro)", () => {
     const a = replaySerpiente(withPause, seed, 1);
     const b = replaySerpiente(withoutPause, seed, 1);
     expect(a).toEqual(b);
+  });
+
+  /**
+   * Caso real (2026-10-05): un jugador terminó con 870 puntos en pantalla
+   * pero el replay en servidor calculó 210, porque en ese momento el
+   * cliente logueaba `performance.now()` sin recortar mientras su propio
+   * acumulador de pasos sí recortaba cada fotograma a `MAX_DT` — un tirón
+   * real (pestaña en segundo plano, pausa del GC) movía la rejilla de más
+   * en el replay sin que el jugador lo hubiera visto nunca.
+   * `components/serpiente-game.tsx` ahora loguea tiempo de juego ya
+   * recortado (`gameTimeRef`), así que el contrato que hay que fijar aquí
+   * es exactamente ese: dos tirones reales de duración muy distinta, una
+   * vez recortados a `MAX_DT` por el cliente, tienen que loguearse igual y
+   * dar el mismo resultado — y sin recortar, el hueco crudo se cuela
+   * entero en el replay y lo cambia, que es justo lo que rompía el caso
+   * real.
+   */
+  test("un tirón de fotograma más largo que MAX_DT no debe inflar los pasos una vez recortado", () => {
+    const seed = "cc42d70449bd553489be94fb1fac4781";
+    const MAX_DT = 200; // mismo valor que components/serpiente-game.tsx
+
+    const withClampedStall = (stallMs: number): SerpienteActionLog => [
+      { type: "dir_down", t: 0 },
+      { type: "dir_left", t: 300 },
+      { type: "dir_up", t: 300 + Math.min(stallMs, MAX_DT) },
+      { type: "dir_right", t: 300 + Math.min(stallMs, MAX_DT) + 400 },
+    ];
+
+    // Un tirón real de 5 s y uno de 50 s, una vez recortados por el
+    // cliente, se loguean como el mismo hueco de 200 ms: mismo resultado.
+    const shortStall = replaySerpiente(withClampedStall(5000), seed, 1);
+    const longStall = replaySerpiente(withClampedStall(50000), seed, 1);
+    expect(shortStall).toEqual(longStall);
+
+    // Sin recortar (el bug real): el hueco crudo de 5 s se cuela entero en
+    // el replay y mueve más pasos de los que el cliente realmente jugó.
+    const unclamped: SerpienteActionLog = [
+      { type: "dir_down", t: 0 },
+      { type: "dir_left", t: 300 },
+      { type: "dir_up", t: 300 + 5000 },
+      { type: "dir_right", t: 300 + 5000 + 400 },
+    ];
+    expect(replaySerpiente(unclamped, seed, 1)).not.toEqual(shortStall);
+  });
+
+  /**
+   * Caso real (2026-10-05, el siguiente al del tirón de fotograma): un
+   * jugador con 700 puntos en pantalla recibió "LA PARTIDA REPRODUCIDA NO
+   * HA TERMINADO" — el choque contra el muro no coincidió con ningún giro,
+   * así que el registro terminaba en el último giro real sin que nada le
+   * dijera al replay que la serpiente había seguido avanzando sola hasta
+   * chocar. `components/serpiente-game.tsx` ahora loguea un `"over"` en el
+   * mismo fotograma en que detecta el choque, con el tiempo de juego ya
+   * acumulado hasta ese instante.
+   */
+  test("el choque contra el muro, sin ningún giro que lo marque, necesita la marca «over»", () => {
+    const seed = "00000000";
+    // A nivel 1 (150 ms de paso) hacen falta diez pasos para que la
+    // serpiente, arrancando en el centro y sin volver a girar, choque
+    // contra el muro derecho: 1500 ms de partida que nadie logueó.
+    const log: SerpienteActionLog = [{ type: "dir_right", t: 0 }];
+
+    const withoutOver = replaySerpiente(log, seed, 1);
+    expect(withoutOver.over).toBe(false);
+
+    const withOver: SerpienteActionLog = [...log, { type: "over", t: 1500 }];
+    const result = replaySerpiente(withOver, seed, 1);
+    expect(result.over).toBe(true);
+    expect(result.score).toBe(withoutOver.score);
   });
 });
 

@@ -12,6 +12,18 @@
  * No valida tamaño ni duración del log: ese tope es responsabilidad de
  * quien llama (la ruta de validación), para que este módulo siga siendo
  * puro y testeable sin red.
+ *
+ * El choque casi nunca coincide con un giro del jugador — lo normal es que
+ * la serpiente siga recta y se estrelle varios pasos después del último
+ * giro logueado, sin ninguna acción que lleve ese instante al registro. Sin
+ * una marca para ese momento, el bucle de abajo nunca drena los pasos que
+ * de verdad matan: se detiene en el último giro con la partida todavía
+ * `over: false`, y la ruta de validación rechaza una partida que sí había
+ * terminado. `"over"` es esa marca: `components/serpiente-game.tsx` la
+ * loguea en el mismo fotograma en que detecta el choque, con el tiempo de
+ * juego ya acumulado hasta ese instante — el mismo acumulador que ya usa
+ * para los giros, así que el bucle de abajo no necesita ningún caso
+ * especial para ella.
  */
 
 import {
@@ -32,7 +44,8 @@ export type SerpienteActionType =
   | "turn_left"
   | "turn_right"
   | "pause"
-  | "resume";
+  | "resume"
+  | "over";
 
 export type SerpienteLogEntry = {
   type: SerpienteActionType;

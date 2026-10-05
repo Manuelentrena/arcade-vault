@@ -126,16 +126,15 @@ function SerpienteGameImpl({
   if (stateRef.current === null)
     stateRef.current = createState(initialLives, createSeededRng(seed));
 
-  // Reloj e historial propios de la partida: el replay en servidor (SPEC 33)
-  // reproduce el paso a partir de estos mismos deltas de tiempo. El reloj
-  // se arma en un efecto, no durante el render, para no llamar a
-  // `performance.now()` (impuro) en ese paso.
-  const startRef = useRef(0);
+  // Historial de la partida: el replay en servidor (SPEC 33) reproduce el
+  // paso a partir de estos deltas de tiempo. Se loguea tiempo de JUEGO
+  // acumulado (`gameTimeRef`), no reloj de pared — el mismo acumulador
+  // recortado por `MAX_DT` que usa el bucle más abajo, para que un frame
+  // perdido (pestaña en segundo plano) no cuente de más aquí y de menos
+  // allí: ambos deben ver exactamente el mismo tiempo transcurrido.
+  const gameTimeRef = useRef(0);
   const logRef = useRef<SerpienteActionLog>([]);
   const prevPausedRef = useRef(paused);
-  useEffect(() => {
-    if (startRef.current === 0) startRef.current = performance.now();
-  }, []);
 
   const colorsRef = useRef<readonly string[]>(COLOR_FALLBACK);
   const lastRunRef = useRef<SerpienteRun | null>(null);
@@ -284,7 +283,7 @@ function SerpienteGameImpl({
       action.run(state);
       logRef.current.push({
         type: action.type,
-        t: performance.now() - startRef.current,
+        t: gameTimeRef.current,
       });
     },
     [paused],
@@ -299,7 +298,7 @@ function SerpienteGameImpl({
     if (stateRef.current?.over) return;
     logRef.current.push({
       type: paused ? "pause" : "resume",
-      t: performance.now() - startRef.current,
+      t: gameTimeRef.current,
     });
   }, [paused]);
 
@@ -317,7 +316,9 @@ function SerpienteGameImpl({
     let accum = 0;
 
     const loop = (ts: number) => {
-      accum += Math.min(ts - last, MAX_DT);
+      const dt = Math.min(ts - last, MAX_DT);
+      accum += dt;
+      gameTimeRef.current += dt;
       last = ts;
       let interval = tickMs(state.level);
       while (accum >= interval && !state.over) {
@@ -328,6 +329,10 @@ function SerpienteGameImpl({
       draw();
       publish();
       if (state.over) {
+        // El choque casi nunca coincide con un giro: sin esta marca, el
+        // replay en servidor se queda en el último giro logueado y nunca
+        // drena los pasos que de verdad matan.
+        logRef.current.push({ type: "over", t: gameTimeRef.current });
         onOverRef.current(logRef.current);
         return;
       }
