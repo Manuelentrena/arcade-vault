@@ -1,0 +1,42 @@
+export const metadata = {
+  title: "BUSCAMINAS se suma al testigo: llega la 1.4.0",
+  date: "2026-10-05",
+  version: "1.4.0",
+  bump: "Menor",
+};
+
+# BUSCAMINAS se suma al testigo: llega la 1.4.0
+
+TETRIX y SERPIENTE ya no se fían de lo que les dices que marcaste. Con esta
+entrada, BUSCAMINAS entra en el mismo círculo.
+
+## BUSCAMINAS juega bajo testigo
+
+Cada partida de BUSCAMINAS manda ahora al servidor el registro exacto de
+las celdas que revelaste y marcaste — fila, columna y el instante de cada
+una — y es el propio servidor quien vuelve a jugarla desde cero, con el
+mismo tablero y la misma semilla que viste tú. La puntuación que se
+guarda en tu historial y en el Salón de la Fama es siempre esa, la que
+recalcula la sala, nunca una cifra que simplemente nos digas. BUSCAMINAS
+no tiene gravedad ni reloj propio, así que el registro viaja más ligero
+que el de TETRIX o SERPIENTE — ni rastro del camino que siguió tu cursor
+por el tablero, solo la celda exacta que tocaste cada vez. Para ti no
+cambia nada mientras juegas: mismas teclas, misma cruceta, mismo ratón.
+
+Quedan dos motores por sumarse a este cierre: ASTEROIDES y ARKANOID lo
+reciben en las próximas entradas.
+
+## También incluye
+
+Desde la última entrada grande, un arreglo real ya viajaba calladito en
+el casco de la nave:
+
+- Dos jugadores perdieron una puntuación legítima en TETRIX y SERPIENTE
+  porque el servidor, al volver a jugar la partida, no llegaba a
+  enterarse de que había terminado — el choque o el encaje final casi
+  nunca coincide con una tecla pulsada. También corregimos un desajuste
+  de reloj en SERPIENTE que, en un tirón real de la partida, podía mover
+  la serpiente de más en la repetición del servidor sin que tú lo
+  notaras nunca. Las dos cosas ya están cerradas.
+
+Como siempre, gracias por jugar. Nos vemos en la próxima ficha.

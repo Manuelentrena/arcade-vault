@@ -23,6 +23,16 @@ import {
   replaySerpiente,
   type SerpienteActionLog,
 } from "../lib/serpiente-replay";
+import {
+  replayBuscaminas,
+  type BuscaminasActionLog,
+} from "../lib/buscaminas-replay";
+import {
+  createState as createBuscaminasState,
+  reveal as revealCell,
+  setCursor as setBuscaminasCursor,
+} from "../lib/buscaminas";
+import { createSeededRng } from "../lib/replay-rng";
 
 const ROUTES = [
   { name: "home", path: "/" },
@@ -449,42 +459,12 @@ test.describe("actividad en vivo", () => {
     },
   );
 
-  /**
-   * SPEC 28: solo en desktop. Desktop y mobile comparten la misma cuenta
-   * (PX_KAI) y el mismo juego (BUSCAMINAS); si los dos proyectos jugaran a la
-   * vez, el que puntuara menos no superaría la marca que acaba de guardar el
-   * otro y el toast de "¡NUEVA MARCA PERSONAL!" nunca aparecería en ese
-   * proyecto — el mismo problema, con el mismo arreglo, que ya tenía la
-   * prueba equivalente de ARKANOID en "reproductor". No es una diferencia de
-   * viewport.
-   */
-  test("una partida récord real aparece en ambas tarjetas", async ({
-    page,
-    isMobile,
-  }) => {
-    test.skip(
-      isMobile,
-      "compite por la misma cuenta y el mismo juego que desktop",
-    );
-    const puntuacion = 10_000 + Math.floor(Math.random() * 900_000);
-    const formateada = puntuacion.toLocaleString("es-ES");
-
-    // BUSCAMINAS: ni TETRIX (capturas de referencia) ni ASTEROIDES (ya usado
-    // por la prueba de autoguardado de "fin de partida como invitado").
-    await signIn(page);
-    await page.goto(`/jugar/buscaminas?puntuacion=${puntuacion}&nivel=1`);
-    await expect(page.locator(".toast-saved")).toContainText(
-      "¡NUEVA MARCA PERSONAL!",
-    );
-
-    await page.goto("/");
-    await hydrated(page);
-    await activitySection(page).scrollIntoViewIfNeeded();
-    await expect(
-      page.locator(".tick-row", { hasText: formateada }),
-    ).toBeVisible({ timeout: NAV_TIMEOUT });
-    await expect(page.locator(".top-row", { hasText: "PX_KAI" })).toBeVisible();
-  });
+  // La variante de esta prueba fusionó con la de ASTEROIDES en "fin de
+  // partida como invitado" (SPEC 34): tras cerrar BUSCAMINAS con
+  // `requiere_replay`, solo ARKANOID y ASTEROIDES quedan sin exigir replay
+  // para una partida recuperada, y ARKANOID ya compite por su propio récord
+  // en "reproductor" — un tercer juego aquí habría reabierto la misma
+  // carrera que este describe ya evita a propósito.
 });
 
 test.describe("invitado desde el rebote de /jugar/[id]", () => {
@@ -846,6 +826,14 @@ test.describe("fin de partida como invitado", () => {
    * aparecería en ese proyecto. El mismo arreglo que ya tenía la prueba
    * equivalente de ARKANOID en este mismo describe. No es una diferencia de
    * viewport.
+   *
+   * SPEC 34: también cubre lo que antes probaba un test propio de BUSCAMINAS
+   * en "actividad en vivo" (que el récord real aparece en el ticker y en el
+   * top de jugadores de la home). Se fusionó aquí porque, tras cerrar
+   * BUSCAMINAS con `requiere_replay`, solo ARKANOID y ASTEROIDES siguen sin
+   * exigir replay para una partida recuperada — y ARKANOID ya compite por su
+   * propio récord en "reproductor". Un segundo test de ASTEROIDES habría
+   * reabierto la misma carrera que esta prueba ya evita a propósito.
    */
   test("al volver con sesión, una partida récord se autoguarda de verdad", async ({
     page,
@@ -879,6 +867,18 @@ test.describe("fin de partida como invitado", () => {
     // Verificación de extremo a extremo: la ficha ya lee esa fila real.
     await page.goto("/juego/asteroides");
     await expect(page.locator(".lb-row").first()).toContainText("PX_KAI");
+
+    // Y la home: el ticker de actividad y el top de jugadores también leen
+    // esta misma fila real (SPEC 27, fusionado aquí desde SPEC 34).
+    await page.goto("/");
+    await hydrated(page);
+    await page
+      .locator(".home-section", { hasText: "ACTIVIDAD EN VIVO" })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.locator(".tick-row", { hasText: formateada }),
+    ).toBeVisible({ timeout: NAV_TIMEOUT });
+    await expect(page.locator(".top-row", { hasText: "PX_KAI" })).toBeVisible();
   });
 });
 
@@ -2188,6 +2188,86 @@ test.describe("SERPIENTE — motor de replay (módulo puro)", () => {
     const result = replaySerpiente(withOver, seed, 1);
     expect(result.over).toBe(true);
     expect(result.score).toBe(withoutOver.score);
+  });
+});
+
+/**
+ * SPEC 34 — el replay en servidor de BUSCAMINAS, segundo motor en seguir a
+ * TETRIX y SERPIENTE. `replayBuscaminas()` es la pieza que hace que el score
+ * guardado en `scores` para BUSCAMINAS ya no sea el que afirma el cliente:
+ * misma semilla y mismo log siempre dan el mismo resultado. A diferencia de
+ * TETRIX/SERPIENTE no hay ningún acumulador de tiempo que integrar — `t`
+ * solo ordena el log cronológicamente antes de reproducirlo — así que el
+ * único contrato propio que hace falta fijar aquí es ese orden y que revelar
+ * una mina termine la partida igual que en el motor real.
+ */
+test.describe("BUSCAMINAS — motor de replay (módulo puro)", () => {
+  test("misma semilla y mismo log siempre dan el mismo resultado", () => {
+    const seed = "deadbeefcafebabe0011223344556677";
+    // El primer reveal cae en el centro de la rejilla: siempre es seguro,
+    // porque placeMines() excluye esa celda y sus ocho vecinas.
+    const log: BuscaminasActionLog = [
+      { type: "reveal", row: 6, col: 8, t: 0 },
+      { type: "flag", row: 0, col: 0, t: 50 },
+    ];
+
+    const a = replayBuscaminas(log, seed, 1);
+    const b = replayBuscaminas(log, seed, 1);
+    expect(a).toEqual(b);
+  });
+
+  test("el log se reproduce en orden cronológico aunque llegue desordenado", () => {
+    const seed = "00000001";
+    const inOrder: BuscaminasActionLog = [
+      { type: "reveal", row: 6, col: 8, t: 0 },
+      { type: "flag", row: 0, col: 0, t: 50 },
+      { type: "flag", row: 0, col: 0, t: 100 },
+    ];
+    // Mismas entradas, orden de llegada invertido: `replayBuscaminas()` las
+    // ordena por `t` antes de reproducirlas, así que el resultado tiene que
+    // ser idéntico al del log ya ordenado.
+    const reversed = [...inOrder].reverse();
+
+    expect(replayBuscaminas(reversed, seed, 1)).toEqual(
+      replayBuscaminas(inOrder, seed, 1),
+    );
+  });
+
+  /**
+   * Revelar una mina es el único final posible de BUSCAMINAS (una vida), y
+   * siempre coincide con la propia acción que lo causa — a diferencia del
+   * top-out o el choque de TETRIX/SERPIENTE, aquí no hace falta ninguna
+   * marca `"over"` aparte: `reveal()` ya pone `over = true` en el mismo
+   * fotograma. Esta prueba usa el motor real para localizar una mina bajo la
+   * semilla elegida, exactamente lo mismo que vería un jugador que la
+   * revelara por error.
+   */
+  test("revelar una mina termina la partida, sin necesitar ninguna marca aparte", () => {
+    const seed = "00000002";
+    const rng = createSeededRng(seed);
+    const probe = createBuscaminasState(1, rng);
+    setBuscaminasCursor(probe, 6, 8);
+    revealCell(probe); // primer reveal: coloca las minas y despeja el centro.
+    expect(probe.over).toBe(false);
+
+    let mine: { row: number; col: number } | null = null;
+    for (let row = 0; row < probe.board.length && !mine; row++) {
+      for (let col = 0; col < probe.board[row].length; col++) {
+        if (probe.board[row][col].mine) {
+          mine = { row, col };
+          break;
+        }
+      }
+    }
+    if (!mine) throw new Error("la semilla de prueba no colocó ninguna mina");
+
+    const log: BuscaminasActionLog = [
+      { type: "reveal", row: 6, col: 8, t: 0 },
+      { type: "reveal", row: mine.row, col: mine.col, t: 100 },
+    ];
+
+    const result = replayBuscaminas(log, seed, 1);
+    expect(result.over).toBe(true);
   });
 });
 
