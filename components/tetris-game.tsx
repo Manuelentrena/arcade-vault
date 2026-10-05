@@ -366,6 +366,14 @@ export function TetrisGame({
       draw();
       publish();
       if (state.over) {
+        // El top-out casi nunca coincide con una acción: encaja por
+        // gravedad, no por `act()`. Sin esta marca, el replay en servidor
+        // se queda en la última acción logueada y nunca drena la caída
+        // que de verdad termina la partida.
+        logRef.current.push({
+          type: "over",
+          t: performance.now() - startRef.current,
+        });
         onOverRef.current(logRef.current);
         return;
       }

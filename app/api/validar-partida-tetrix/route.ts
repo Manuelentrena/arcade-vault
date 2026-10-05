@@ -16,6 +16,7 @@ const ACTION_TYPES = new Set([
   "hard_drop",
   "pause",
   "resume",
+  "over",
 ]);
 
 type ValidatePayload = { slug: string; token: string; log: TetrixActionLog };

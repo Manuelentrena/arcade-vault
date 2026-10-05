@@ -20,6 +20,7 @@ const ACTION_TYPES = new Set([
   "turn_right",
   "pause",
   "resume",
+  "over",
 ]);
 
 type ValidatePayload = { slug: string; token: string; log: SerpienteActionLog };

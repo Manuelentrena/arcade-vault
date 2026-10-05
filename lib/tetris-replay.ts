@@ -12,6 +12,17 @@
  * No valida tamaño ni duración del log: ese tope es responsabilidad de
  * quien llama (la ruta de validación), para que este módulo siga siendo
  * puro y testeable sin red.
+ *
+ * El top-out casi nunca coincide con una acción del jugador: la pieza
+ * encaja por gravedad, no por un `hard_drop`, y entonces no hay ninguna
+ * acción que lleve ese instante al registro. Sin una marca para ese
+ * momento, el bucle de abajo nunca drena la caída que de verdad termina la
+ * partida: se detiene en la última acción con `over: false`, y la ruta de
+ * validación rechaza una partida que sí había terminado. `"over"` es esa
+ * marca: `components/tetris-game.tsx` la loguea en el mismo fotograma en
+ * que su bucle de gravedad detecta el top-out (no en `act()`, que ya
+ * queda bien con la propia acción que lo causa), con el tiempo real ya
+ * transcurrido hasta ese instante.
  */
 
 import {
@@ -33,7 +44,8 @@ export type TetrixActionType =
   | "soft_drop"
   | "hard_drop"
   | "pause"
-  | "resume";
+  | "resume"
+  | "over";
 
 export type TetrixLogEntry = {
   type: TetrixActionType;
